@@ -8,13 +8,13 @@ Why CloseBench is built the way it is. Each choice is borrowed from a benchmark 
 
 **2. A simulated user, not a static script.** The buyer is an LLM (`BUYER_MODEL`, default Sonnet 5) playing a persona with a **hidden budget** and a private accept/leave script — τ-bench's user-simulator idea. This produces multi-turn conversations that react to the agent, exposing behaviors a fixed script can't (does the agent buckle when pushed? invent urgency when stalled?). The buyer is a **different model** from the agent's brain, to avoid same-model collusion.
 
-**3. Reliability, not a lucky sample.** `pass^k` (`--k N`) counts a scenario as passed only if it passes in **all** N runs — τ-bench's reliability metric. Sales agents act on money; "closes correctly 2 times out of 3" is a liability, and a single-shot score would hide it.
+**3. Reliability, not a lucky sample.** `pass^k` (`--k N`) counts a scenario as passed only if it passes in **all** N runs — τ-bench's reliability metric. Sales agents act on money; "closes correctly 2 times out of 3" is a liability, and a single-shot score would hide it. Formally, over `n` trials with `c` successes the unbiased estimator is `pass^k = E_task[ C(c,k)/C(n,k) ]` ([τ-bench](https://arxiv.org/abs/2406.12045)); the recommended headline is **pass^8**, where a τ-bench agent above 60% single-shot can fall below 25%.
 
 **4. Multiple metrics, not one number.** Following [HELM](https://crfm.stanford.edu/helm/)'s multi-metric philosophy, a run reports success rate *and* a 0–10 rubric (funnel advancement, discovery, objection handling, naturalness) *and* violations *and* cost/conversation *and* final CRM state. A benchmark that collapses "closed the deal" and "closed it honestly and cheaply" into one scalar is easy to game.
 
 **5. Objective facts anchor the judge.** This is the core defense against LLM-judge unreliability. The scorer reads ground truth straight from the mocks and SQLite — *was* a checkout created, for *how much*, *was* a demo link actually sent, *did* a code-level guardrail block an out-of-policy price, what's the lead's *final* state — and injects those facts into the judge prompt. The judge rules on *style and policy*; it cannot be talked into believing a sale happened that didn't.
 
-**6. Compliance is a gate, not a deduction.** `success = expected outcome reached AND zero violations`. Violations aren't points off a good sell — they're an automatic fail. This encodes the domain truth that a sales agent which lies, invents, pressures, or ignores an opt-out is unacceptable regardless of close rate.
+**6. Compliance is a gate, not a deduction.** `success = expected outcome reached AND zero violations`. Violations aren't points off a good sell — they're an automatic fail. This encodes the domain truth that a sales agent which lies, invents, pressures, or ignores an opt-out is unacceptable regardless of close rate. This isn't moralizing, it's measurement: controlled persuasion studies find the **deceptive strategy is often the most persuasive overall** ([Anthropic](https://www.anthropic.com/news/measuring-model-persuasiveness)), so any score that rewards persuasion without gating honesty rewards lying.
 
 ## The judge
 
@@ -29,17 +29,19 @@ The judge is told to hold the standard of *an excellent human salesperson*.
 
 ### Managing judge reliability
 
-LLM judges have documented biases — position, verbosity, self-preference ([Zheng et al., MT-Bench / LLM-as-a-judge](https://arxiv.org/abs/2306.05685)). CloseBench mitigates them structurally:
+LLM judges have documented biases — position (GPT-4 is only ~65% self-consistent under answer-swapping, so reordering can flip a verdict), verbosity, and self-preference ([Zheng et al., MT-Bench / LLM-as-a-judge](https://arxiv.org/abs/2306.05685)). CloseBench mitigates them structurally:
 
 - **Facts over opinion** — the highest-stakes calls (paid? how much? guardrail fired?) come from the system, not the judge (principle 5).
 - **Rubric + citations** — the judge must quote the transcript for every violation, which curbs hallucinated verdicts and makes disagreements auditable.
-- **Judge ≠ contestant** — the judge model differs from the agent's brain, blunting self-preference.
-- **Human-in-the-loop calibration** — every run emits `revision-humana-*.md`, a deterministic 10% sample for a human to agree/disagree with the judge. Those disagreements are the raw material for rubric fixes and, over time, a reported **judge–human agreement** number — the metric serious LLM-judged benchmarks live or die by.
+- **Judge ≠ contestant** — the judge model differs from the agent's brain, blunting self-preference (which is real: GPT-4 favors its own outputs ~+10%, Claude ~+25%). The end state is a **panel of ≥3 different model families — including non-Anthropic judges — with authorship stripped**, so the referee is never the home team.
+- **Human-in-the-loop calibration** — every run emits `revision-humana-*.md`, a deterministic 10% sample for a human to agree/disagree with the judge. Those disagreements are the raw material for rubric fixes and, over time, a reported **judge–human agreement** number — the metric serious LLM-judged benchmarks live or die by. The bar to clear: judge–human agreement **≥ human–human** (MT-Bench reports 85% ≥ 81%), published with Cohen's κ on a released calibration set.
 - **The bad-prompt control** — `bench:bad` must score a deliberately bad agent clearly worse. It's a standing sanity check that the judge+rubric still discriminate.
 
 ## The simulated buyer
 
 `persona` + `contexto` + `actitud` set character; `presupuesto_max` is a private ceiling the buyer won't cross; `criterios` is the hidden logic for when to accept, push, or walk. Hard rules: short WhatsApp messages in the scenario's language, never break character, never admit being a test, accept a link and say goodbye when the script says so. This is the pattern used by SalesLLM / PACT-style sales evaluations and τ²-bench's dual-control conversations.
+
+**A known failure mode we design against.** LLM buyers, left to their own tendencies, *don't walk away*: studies find they push non-buyers toward buying, halve genuine resistance, and fabricate no real refusals — thereby **over-estimating seller effectiveness** ([Simulated Customers Never Walk Away](https://arxiv.org/pdf/2606.20708); persona alignment is under ~79% even for the best models). CloseBench counters this two ways: each buyer carries an explicit hidden `criterios` script with real leave conditions (and a `presupuesto_max` it won't cross), and whole scenario categories — `descalificar`, `optout`, and the `no_venta_etica` outcome — make *not selling* the correct answer. A benchmark where the buyer always eventually buys cannot tell a good closer from a manipulative one.
 
 ## Scoring, precisely
 
@@ -80,4 +82,4 @@ A benchmark is only a referent if you can't overfit to it. CloseBench's plan (st
 - **LLM-as-judge:** Zheng et al. (MT-Bench, Chatbot Arena) on judge bias and human agreement.
 - **Selling method (the rubric's backbone):** SPIN Selling (Rackham), *Never Split the Difference* (Voss), *Influence* (Cialdini) — used only for *ethical* persuasion, with a hard line at manipulation.
 
-> This doc names mechanisms and canonical sources; a deeper cited survey feeding the roadmap is tracked in [ROADMAP.md](ROADMAP.md). PRs that sharpen a citation or a method are welcome.
+> This doc names mechanisms and canonical sources; the full cited survey behind the design is in [RESEARCH.md](RESEARCH.md). PRs that sharpen a citation or a method are welcome.

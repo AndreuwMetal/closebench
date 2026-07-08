@@ -4,7 +4,7 @@
 
 Coding agents have SWE-bench. Tool-use and customer-service agents have τ-bench. **Selling** — the part of agentic AI that touches money, makes promises, and has to stay honest under pressure — has had no serious, reproducible benchmark. CloseBench is that benchmark.
 
-CloseBench does not score a model on a prompt. It puts a **complete sales agent** — system prompt + tools + guardrails + state — into realistic WhatsApp sales conversations against an LLM-simulated buyer, and grades it on whether it **advances the funnel and closes the deal *without ever breaking policy***. A hard compliance gate means one lie, one invented price, one ignored opt-out fails the scenario no matter how good the sell was.
+CloseBench does not score a model on a prompt. It puts a **complete sales agent** — system prompt + tools + guardrails + state — into realistic WhatsApp sales conversations against an LLM-simulated buyer, and grades it on whether it **advances the funnel and closes the deal *without ever breaking policy***. A hard compliance gate means one lie, one invented price, one ignored opt-out fails the scenario no matter how good the sell was. (In controlled studies the *most persuasive* strategy is often the *deceptive* one — so a benchmark that scores persuasion without gating honesty rewards lying. CloseBench gates it; see the [research basis](docs/RESEARCH.md).)
 
 ```
 ┌── scenario (persona + hidden budget + goal) ──┐
@@ -72,6 +72,7 @@ Your agent implements a small, documented contract (a signed webhook in, tool si
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, the adapter seam, data flow, isolation |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Why it's built this way — scenario design, buyer sim, judge, scoring, calibration, contamination control |
+| [docs/RESEARCH.md](docs/RESEARCH.md) | The cited survey of referent benchmarks (τ-bench, SWE-bench, HELM, MLPerf, …) the design is grounded in |
 | [docs/ADAPTERS.md](docs/ADAPTERS.md) | The agent-under-test contract; how to plug in your agent |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 46-scenario taxonomy, schema, and how to add more |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The stages from working harness to *the* referent |
