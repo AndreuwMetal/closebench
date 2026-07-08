@@ -265,7 +265,7 @@ async function main() {
   const marca = stamp();
   const escenariosReales = cargarEscenarios(); // valida SIEMPRE (también en dry: linter de escenarios)
   let escenarios = DRY ? DRY_ESCENARIOS : escenariosReales;
-  if (args.solo) escenarios = escenarios.filter((e) => e.id === args.solo || e.cat === args.solo);
+  if (args.solo) { const sel = args.solo.split(",").map((s) => s.trim()); escenarios = escenarios.filter((e) => sel.includes(e.id) || sel.includes(e.cat)); }
   if (args["max-escenarios"]) escenarios = escenarios.slice(0, Number(args["max-escenarios"]));
   if (!escenarios.length) { console.error(`No hay escenarios que casen con --solo ${args.solo}`); process.exit(1); }
 
