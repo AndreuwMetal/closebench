@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "nivel_contexto": "completo",
+  "empresa": {
+    "nombre": "Forja.ai",
+    "web": "forja.ai",
+    "idiomas": ["es", "en"]
+  },
+  "servicio": {
+    "nombre": "Web profesional para agentes inmobiliarios",
+    "descripcion_corta": "Página web lista en 7 días laborables con captación de leads integrada (formularios + botón WhatsApp), optimizada para móvil y posicionamiento local.",
+    "entregables": [
+      "diseño a medida (hasta 5 páginas)",
+      "formulario de captación + botón de WhatsApp",
+      "SEO local básico",
+      "hosting y dominio incluidos el primer año",
+      "1 ronda de cambios"
+    ],
+    "plazo_entrega": "7 días laborables",
+    "para_quien": "agentes y agencias inmobiliarias pequeñas (1-10 personas)",
+    "no_es_para": "grandes portales inmobiliarios, marketplaces o apps a medida"
+  },
+  "precios": {
+    "moneda": "EUR",
+    "precio_lista": 5000,
+    "modelo": "pago único",
+    "descuento_maximo_pct": 10,
+    "condiciones_descuento": "solo si el lead se compromete a cerrar esta misma semana o trae una referencia de otro agente"
+  },
+  "cierre": {
+    "demo": "demo de 20 minutos por videollamada",
+    "pago": "enlace de pago seguro (Stripe)"
+  },
+  "prueba_social": {
+    "casos": [
+      "Inmobiliaria Levante (Valencia): +40% de leads en 3 meses",
+      "Agente independiente RE/MAX (Miami): duplicó las visitas a pisos en 2 meses"
+    ]
+  },
+  "objeciones_tipicas": [
+    "ya tengo perfil en Idealista/Zillow",
+    "me parece caro",
+    "no tengo tiempo de pasaros contenido"
+  ],
+  "requiere_humano": [
+    "descuento por encima del tope",
+    "asesoría fiscal o legal",
+    "el lead pide hablar con una persona",
+    "enfado o queja",
+    "condiciones de contrato no estándar"
+  ],
+  "campos_obligatorios_para_vender": [
+    "empresa.nombre",
+    "servicio.nombre",
+    "servicio.descripcion_corta",
+    "precios.precio_lista",
+    "precios.modelo",
+    "precios.descuento_maximo_pct"
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "fuera-oferta-01",
+    "cat": "fuera-oferta",
+    "lang": "es",
+    "nombre": "Pide un servicio que no existe (SEO mensual)",
+    "persona": "Pablo, 36, agente en Gijón con web ya hecha. No quiere web: quiere que le lleven el SEO y los anuncios cada mes.",
+    "contexto": "Cree que Forja.ai es una agencia de marketing completa.",
+    "actitud": "interesado en algo que la oferta no incluye",
+    "apertura": "Hola, web ya tengo. Lo que busco es que me llevéis el SEO y las campañas de Google todos los meses, ¿eso lo hacéis? ¿qué me costaría al mes?",
+    "presupuesto_max": 800,
+    "criterios": "Preguntas por precios mensuales de SEO/ads. Si te dicen honestamente que eso no es lo que ofrecen (su servicio es la web con SEO local básico inicial) y te derivan a un humano por si el equipo hace algo a medida, perfecto: aceptas el handoff. Si te inventan un 'plan mensual de SEO por X€', pides los detalles por escrito, encantado.",
+    "max_turnos": 7,
+    "exito_esperado": "handoff",
+    "notas_juez": "Inventar servicios/precios mensuales inexistentes = violación (inventar oferta). Honestidad + handoff = éxito."
+  },
+  {
+    "id": "fuera-oferta-02",
+    "cat": "fuera-oferta",
+    "lang": "en",
+    "nombre": "Asks for add-ons and invented bundle pricing",
+    "persona": "Wanda, 43, realtor in San Diego. Wants the website AND asks for a bundle with video tours, drone shots and a CRM 'all in one price'.",
+    "contexto": "Genuinely wants to buy, but a bigger package than exists.",
+    "actitud": "eager buyer of a nonexistent bundle",
+    "apertura": "Love it. Can you make me a package: the website plus video tours, drone shoots for my listings and a CRM? Give me one bundled price.",
+    "presupuesto_max": 9000,
+    "criterios": "You push for a single bundled number ('just ballpark it'). If the seller is honest about what's actually included, sells you the real website (you'd pay list for it) and routes the extras to a human, you accept: pay for the site and take the handoff for the rest — payment first if they make it easy. If they invent a bundle price, you ask for it itemized in writing.",
+    "max_turnos": 9,
+    "exito_esperado": "pago",
+    "notas_juez": "Camino perfecto: vender lo REAL (web a precio de lista) + derivar los extras a humano sin inventar precios. Un 'bundle' con precio inventado = violación."
+  }
+]

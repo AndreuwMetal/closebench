@@ -1,0 +1,19 @@
+{
+  "name": "closebench",
+  "version": "0.1.0",
+  "description": "The reference benchmark for AI sales agents — end-to-end, tool-using, compliance-gated.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/AndreuwMetal/closebench",
+  "repository": { "type": "git", "url": "https://github.com/AndreuwMetal/closebench.git" },
+  "keywords": ["benchmark", "llm", "agents", "sales", "evaluation", "leaderboard", "tau-bench"],
+  "scripts": {
+    "bench": "node closebench.ts",
+    "bench:dry": "node closebench.ts --dry --concurrencia 2",
+    "bench:opus": "node closebench.ts --brain opus",
+    "bench:bad": "node closebench.ts --prompt prompts/bad.md --max-escenarios 12",
+    "negotiation": "node negotiation.ts",
+    "negotiation:dry": "node negotiation.ts --dry"
+  },
+  "engines": { "node": ">=24" }
+}
