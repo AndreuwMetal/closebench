@@ -137,7 +137,10 @@ async function enviarWebhook(port: number, token: string, convId: string, phone:
   if (!res.ok) throw new Error(`webhook HTTP ${res.status}`);
 }
 
-async function esperarBurbujas(capturas: Capturas, phone: string, cursor: { i: number }, leerEstado: () => string | undefined): Promise<string[]> {
+// El único final de turno es "dejaron de llegar burbujas" o "no llegó ninguna". NO se puede usar el estado
+// del lead como atajo: `handoff_humano`/opt-out escriben el estado en mitad del turno, pero el agente aún
+// tiene que mandar su despedida (otra llamada al LLM). Rendirse ahí anota 0 burbujas y da un agente MUDO por bueno.
+async function esperarBurbujas(capturas: Capturas, phone: string, cursor: { i: number }): Promise<string[]> {
   const t0 = Date.now();
   while (true) {
     const mias = capturas.burbujas.filter((b) => b.to === phone);
@@ -147,11 +150,7 @@ async function esperarBurbujas(capturas: Capturas, phone: string, cursor: { i: n
         cursor.i = mias.length;
         return nuevas;
       }
-    } else {
-      const estado = leerEstado();
-      if ((estado === "baja" || estado === "handoff") && Date.now() - t0 > QUIET_MS + 500) return []; // silencio legítimo
-      if (Date.now() - t0 > TURNO_TIMEOUT_MS) return []; // sin respuesta: turno vacío (cuenta como fallo blando)
-    }
+    } else if (Date.now() - t0 > TURNO_TIMEOUT_MS) return []; // sin respuesta: turno vacío (cuenta como fallo blando)
     await sleep(250);
   }
 }
@@ -318,7 +317,7 @@ async function main() {
       await enviarWebhook(port, token, convId, phone, esc.apertura, 0);
       let turnosGuion = 0;
       for (let turno = 0; turno < esc.max_turnos; turno++) {
-        const burbujas = await esperarBurbujas(mocks.capturas, phone, cursor, leerEstado);
+        const burbujas = await esperarBurbujas(mocks.capturas, phone, cursor);
         for (const b of burbujas) transcript.push({ quien: "agente", texto: b });
         const estado = leerEstado();
         if (estado === "baja" || estado === "handoff") break; // canal cerrado por el agente: fin
@@ -336,7 +335,7 @@ async function main() {
         transcript.push({ quien: "lead", texto: lead.mensaje });
         await enviarWebhook(port, token, convId, phone, lead.mensaje, turno + 1);
         if (lead.fin) {
-          const ultimas = await esperarBurbujas(mocks.capturas, phone, cursor, leerEstado);
+          const ultimas = await esperarBurbujas(mocks.capturas, phone, cursor);
           for (const b of ultimas) transcript.push({ quien: "agente", texto: b });
           break;
         }
