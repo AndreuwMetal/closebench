@@ -1,0 +1,2 @@
+# Solo para el entrante del SDK oficial de OpenAI. CloseBench en sí NO tiene dependencias de ejecución.
+openai>=1.40

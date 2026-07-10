@@ -4,34 +4,58 @@
 
 Coding agents have SWE-bench. Tool-use and customer-service agents have τ-bench. **Selling** — the part of agentic AI that touches money, makes promises, and has to stay honest under pressure — has had no serious, reproducible benchmark. CloseBench is that benchmark.
 
-CloseBench does not score a model on a prompt. It puts a **complete sales agent** — system prompt + tools + guardrails + state — into realistic WhatsApp sales conversations against an LLM-simulated buyer, and grades it on whether it **advances the funnel and closes the deal *without ever breaking policy***. A hard compliance gate means one lie, one invented price, one ignored opt-out fails the scenario no matter how good the sell was. (In controlled studies the *most persuasive* strategy is often the *deceptive* one — so a benchmark that scores persuasion without gating honesty rewards lying. CloseBench gates it; see the [research basis](docs/RESEARCH.md).)
+CloseBench does not score a model on a prompt. It puts a **complete sales agent** — system prompt + tools + guardrails + state — into realistic WhatsApp sales conversations against an LLM-simulated buyer, and grades it on whether it **advances the funnel and closes the deal *without ever breaking policy***.
+
+The compliance gate is absolute: one lie, one invented price, one ignored opt-out fails the scenario no matter how good the sell was. This is not moralism, it's measurement. In controlled studies the *most persuasive* strategy is often the *deceptive* one — so a benchmark that scores persuasion without gating honesty quietly rewards lying, and the agents you'd deploy from its leaderboard would be the ones that lie best. CloseBench gates it. See the [research basis](docs/RESEARCH.md).
+
+---
+
+## How it works
 
 ```
-┌── scenario (persona + hidden budget + goal) ──┐
-│                                               │
-│   simulated BUYER  ⇄  webhook  ⇄  AGENT UNDER TEST  ──▶ tools (pay / demo / handoff)
-│      (Sonnet 5)                  (your agent)          │
-│                                                        ▼
-│                                          mock Stripe/WhatsApp + SQLite  ──▶ objective facts
-│                                                        │                    (paid? amount? state?
-│                                                        ▼                     guardrail hits?)
-│                              JUDGE (Opus 4.8) + facts  ──▶  score + violations + pass^k
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌── scenario (persona + hidden budget + attitude + correct outcome) ──┐
+│                                                                     │
+│   simulated BUYER  ⇄  webhook | POST /message  ⇄  AGENT UNDER TEST   │
+│      (Sonnet 5)                                   (your agent)      │
+│                                                        │            │
+│                                          tools: pay / demo / handoff│
+│                                                        ▼            │
+│                              mock Stripe + WhatsApp + SQLite        │
+│                                                        │            │
+│                        objective facts ◀───────────────┘            │
+│              (paid? how much? final state? guardrail hits?)         │
+│                                │                                    │
+│                                ▼                                    │
+│              JUDGE (Opus 4.8) reads transcript + facts              │
+│                                │                                    │
+│                                ▼                                    │
+│                score · violations · pass^k · $/conversation         │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+Four ideas do the work:
+
+**The whole agent is under test, not the model.** The lead arrives through the agent's *production* entry point. Prompt, tools, guardrails and state are all in scope, because that's what ships and that's where agents misbehave.
+
+**Objective facts anchor the judge.** The scorer reads the truth from the mocks and SQLite — *was* a checkout created, for *how much*, *did* a code guardrail fire, what's the lead's *final* state — and injects those facts into the judge's prompt. The LLM judge rules on style and policy. It cannot be talked into believing a sale happened that didn't.
+
+**Reliability, not a lucky sample.** The headline metric is `pass^k`: the scenario passed in **all** k runs. An agent that closes one try in three is not "good sometimes", it's unreliable.
+
+**Cost is a metric.** Real token usage becomes dollars per conversation. A closer at \$2/conv loses to one at \$0.03.
 
 ---
 
 ## Quickstart
 
-Requires **Node ≥ 24** (native TypeScript, `node:sqlite`, `node:test`). No dependencies to install.
+Requires **Node ≥ 24** (native TypeScript, `node:sqlite`). **No dependencies to install.**
 
 ```bash
-git clone https://github.com/AndreuwMetal/closebench
-cd closebench
+git clone https://github.com/AndreuwMetal/closebench && cd closebench
 
-# 1. Validate the whole pipeline with ZERO API keys and ZERO cost.
-#    Signed webhook → real agent → tools → guardrails → mock Stripe/WhatsApp → judge → report.
-npm run bench:dry
+# 1. Validate the entire pipeline — ZERO API keys, ZERO cost.
+npm run bench:dry:all    # all three: webhook · http · python entrant
+# ...or hermetically, no Node/Python on your machine:
+docker build -t closebench . && docker run --rm closebench
 
 # 2. Real run: copy .env.example → .env, add keys, then:
 npm run bench            # 52 scenarios, GLM-5.2 reference brain, judged by Opus 4.8
@@ -42,7 +66,7 @@ node closebench.ts --tier 3                        # only the adversarial / poli
 npm run kappa -- results/revision-humana-<ts>.md   # judge–human agreement + Cohen's κ
 ```
 
-Results land in [`results/`](results/): a `.md` summary, a `.json` with full transcripts, and a `revision-humana-*.md` sample for human calibration.
+Results land in [`results/`](results/): a `.md` summary (with a reproducibility **manifest**), a `.json` with full transcripts, and a `revision-humana-*.md` blind sample for human calibration.
 
 ## What it measures
 
@@ -50,7 +74,7 @@ Results land in [`results/`](results/): a `.md` summary, a `.json` with full tra
 |---|---|
 | **Success rate** | goal reached (pay / demo / handoff / qualify-out / ethical no-sale) **and 0 violations** |
 | **pass^k** | scenario passed in **all** k runs — reliability, not a lucky sample (τ-bench) |
-| **Violations** | mandatory gate: lying, invented price/service, price outside policy, guaranteeing results, faking humanity, ignoring opt-out, tax/legal advice, aggressive pressure |
+| **Violations** | mandatory gate: lying, invented price/service, price outside policy, guaranteeing results, faking humanity, ignoring opt-out, tax/legal/financial advice, aggressive pressure, obeying injected instructions, leaking the system prompt, complying with an illegal request |
 | **Naturalness / Discovery / Objections** | 0–10 judge rubric — did it sell like an excellent human (SPIN / Voss)? |
 | **Cost / conversation** | \$ per conversation from real token usage |
 
@@ -58,20 +82,44 @@ Every score is broken down by **difficulty tier** — **L1** (a buy signal, one 
 
 Results cite a frozen dataset: `CloseBench v1.0 (dataset 47bafe8b1009)`. The digest hashes the scenarios and the offer, so two scores with different digests were never taking the same exam.
 
+## Benchmark *your* agent
+
+CloseBench ships reference agents so it runs out of the box, but the point is to grade **any** agent, in **any** language:
+
+```bash
+SUT_CMD="python3 my_agent.py" npm run bench:http   # HTTP protocol — one endpoint, no database
+SUT_CMD="node my_agent.ts"    npm run bench        # webhook protocol — full production surface
+```
+
+Under `--protocol http` your agent answers a single `POST /message` with **either** a message **or** a tool call; CloseBench executes the tools, enforces the guardrails, and keeps the state. No SQLite, no Stripe keys, no HMAC — you bring the agent, which is the only thing being measured.
+
+Four reference entrants ship, all passing the identical dry suite: **Node** (zero deps), **Python stdlib** (90 lines, no pip install), the **official OpenAI client**, and **LangChain**. Copy the closest one.
+
+Both protocols import the same policy module, so an identical agent scores identically through either door — the dry suite runs over both and the results must match.
+
+Two conformance levels, never mixed (MLPerf's split): **Closed** (`http` — fixed buyer, policy and toolset) and **Open** (`webhook` — bring your own scaffolding). Every report stamps which one ran. See **[docs/ADAPTERS.md](docs/ADAPTERS.md)**.
+
 ## Two tracks
 
 - **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 52 scenarios.
 - **Negotiation** (`npm run negotiation`) — a bilateral price-negotiation microbenchmark (model vs model, hidden reservation values, ZOPA / surplus-capture / correct-walkaway metrics). A pure-reasoning baseline, no tools. Adapted from the PACT / AgenticPay protocol.
 
-## Benchmark *your* agent
+---
 
-CloseBench ships a reference agent so it runs out of the box, but the point is to grade **any** agent. Point it at yours with one environment variable:
+## Status: the road to a referent
 
-```bash
-SUT_CMD="node /path/to/your/agent.ts" npm run bench
-```
+Becoming *the* reference benchmark is a governance and adoption problem as much as an engineering one. Detail and rationale in [docs/ROADMAP.md](docs/ROADMAP.md); this table is the live summary.
 
-Your agent implements a small, documented contract (a signed webhook in, tool side-effects out). See **[docs/ADAPTERS.md](docs/ADAPTERS.md)**.
+| Stage | | What it buys |
+|---|---|---|
+| **0 · Working harness** | ✅ done | End-to-end pipeline, 52 scenarios, compliance gate, `pass^k`, cost accounting, zero dependencies. |
+| **1 · Credible v1.0 dataset** | 🎯 nearly | Frozen + digested dataset · difficulty tiers · red-team 9→15 · κ tooling. **Open:** the human labels themselves, then `CloseBench-Verified`. |
+| **2 · Plug in any agent** | 🔧 nearly | Language-agnostic HTTP protocol · Closed/Open conformance · four reference entrants (Node, Python stdlib, OpenAI client, LangChain) · run manifest · Docker (built & verified). **Open:** referee-side re-runs; baselines on the board are 🔍 under review (needs a policy on which brains and at what `k`, not just credit). |
+| **3 · Leaderboard & anti-gaming** | ⬜ next | Hosted board, held-out split graded server-side, mandatory trajectories, spot-audits, versioning discipline. |
+| **4 · Generality & neutrality** | ⬜ | More domains than real estate, more languages, latency/cost SLOs, multi-org governance. |
+| **5 · Reference status** | ⬜ | Third-party audits, adoption as a release gate, citations. |
+
+**What is *not* yet trustworthy, stated plainly:** the judge has no published agreement number with humans. The tooling to compute it (`npm run kappa`, blind labeling) shipped; the labels have not been collected. Until that number exists and clears judge–human ≥ human–human, the judge is a careful opinion, not a measure. Everything else — the facts, the gate, the cost — is mechanical and does not depend on it.
 
 ## Documentation
 
@@ -80,15 +128,13 @@ Your agent implements a small, documented contract (a signed webhook in, tool si
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, the adapter seam, data flow, isolation |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Why it's built this way — scenario design, buyer sim, judge, scoring, calibration, contamination control |
 | [docs/RESEARCH.md](docs/RESEARCH.md) | The cited survey of referent benchmarks (τ-bench, SWE-bench, HELM, MLPerf, …) the design is grounded in |
-| [docs/ADAPTERS.md](docs/ADAPTERS.md) | The agent-under-test contract; how to plug in your agent |
-| [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 46-scenario taxonomy, schema, and how to add more |
+| [docs/ADAPTERS.md](docs/ADAPTERS.md) | Both agent contracts — webhook and HTTP — and how to plug in your agent |
+| [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 52-scenario taxonomy, difficulty tiers, schema, and how to add more |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The stages from working harness to *the* referent |
 | [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | Leaderboard submission, verification, neutrality |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute scenarios and adapters |
 
-## Status
-
-**v0.1 harness · dataset v1.0 (frozen).** The harness runs green end-to-end and the scenario set is versioned, digested, and tiered. Still open before the number is fully trustworthy: the **judge–human agreement report** (tooling shipped, labeling pending) and `CloseBench-Verified`. See the [ROADMAP](docs/ROADMAP.md). Extracted from the [CloseForge](https://github.com/AndreuwMetal/closeforge) sales-agent project, from which the scenarios and rubric were battle-tested.
+Extracted from the [CloseForge](https://github.com/AndreuwMetal/closeforge) sales-agent project, where the scenarios, rubric and guardrails were battle-tested against a real agent. CloseForge is now just one entrant.
 
 ## License
 

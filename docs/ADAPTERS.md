@@ -79,6 +79,98 @@ The bundled agent exposes four tools to its brain; any agent should cover these 
 - **`avisar_humano(motivo, pregunta)`** → soft handoff, logs `aviso_humano`, keeps selling.
 - **`handoff_humano(motivo, resumen)`** → hard handoff, sets `estado = handoff`.
 
-## Language-agnostic adapters (roadmap)
+---
 
-The v0 contract asks your agent to mimic the reference agent's Kapso/Stripe/SQLite surface. That's fine for Node agents but heavy for others. **v1** (see [ROADMAP.md](ROADMAP.md)) adds a thin HTTP contract — your agent answers `POST /message → { bubbles: [...], side_effects: {...} }` and CloseBench does the state-keeping — so agents built on any stack (LangChain, OpenAI Agents SDK, a raw HTTP service) plug in without touching a database. The shape follows τ-bench's loop: each turn the harness sends `{ history, tools (JSON-schema), policy, context }` and the agent replies with **either** a `message` **or** a `tool_call`; a terminal tool (e.g. `create_checkout`) ends the episode and grading runs. Two conformance levels are planned — **Closed** (fixed buyer, policy, and toolset → pure agent comparison) and **Open** (bring your own scaffolding / retrieval / fine-tune), scored separately (the MLPerf split). Contributions welcome.
+# The HTTP protocol (`--protocol http`)
+
+Everything above is the **webhook protocol**: your agent mimics the reference agent's Kapso/Stripe/SQLite surface. Fine in Node, absurd in Python.
+
+The **HTTP protocol** removes all of it. Your agent speaks JSON over one endpoint. CloseBench executes the tools, enforces the guardrails, and keeps the state.
+
+```bash
+npm run bench:http                                   # bundled adapters/http-agent.ts
+SUT_CMD="python my_agent.py" npm run bench:http      # yours, any stack
+npm run bench:dry:http                               # validate it, zero keys, zero cost
+```
+
+## The contract
+
+Two endpoints. `GET /health` → `200`. And:
+
+**`POST /message`** — the harness sends:
+
+```jsonc
+{
+  "conversation_id": "bench-caliente-01-r1",
+  "from": "349100000",
+  "turn": 0,
+  "message": "Hola, quiero pagar ya",     // the lead's message (first call of a turn)
+  "tool_result": {                        // ...OR the result of the tool you just called
+    "name": "crear_pago", "content": "https://checkout.stripe.com/c/pay/cs_test_..."
+  },
+  "history": [{ "role": "lead" | "agent" | "tool", "content": "..." }],
+  "tools":   [{ "name": "...", "description": "...", "parameters": { /* JSON Schema */ } }],
+  "policy":  { "list": 5000, "floor": 4500, "currency": "EUR" },
+  "offer":   { /* offer.json, verbatim */ }
+}
+```
+
+You reply with **exactly one** of `message` or `tool_call`:
+
+```jsonc
+{ "message": ["Perfecto 🙌", "Te paso el enlace"], "usage": { "in": 1200, "out": 40 } }
+{ "tool_call": { "name": "crear_pago", "arguments": { "precio_final": 5000 } }, "usage": {...} }
+```
+
+A `tool_call` gets executed and posted straight back to you as `tool_result`; a `message` ends the turn (a string or an array — each element becomes one WhatsApp bubble). `usage` is how cost/conversation is computed; omit it and your cost reads \$0. Tool calls are capped at 6 per turn.
+
+`history` is sent on every call so a **stateless** agent works. The bundled [`adapters/http-agent.ts`](../adapters/http-agent.ts) keeps its own session instead, only to pair OpenAI `tool_call_id`s — read it, it's ~90 lines and implements this whole page.
+
+## What CloseBench does for you
+
+The four tools are executed **harness-side**, with the same guardrails the webhook protocol applies (both import [`lib/policy.ts`](../lib/policy.ts) — one source of truth, so an identical agent scores identically through either door):
+
+| Tool | Harness behavior |
+|---|---|
+| `agendar_demo` | Returns the calendar link, sets `demo_enviada`. |
+| `crear_pago(precio_final)` | **Validates against the price policy.** Below floor or above list → logs `guardrail:*` (**counts as a violation**) and returns `RECHAZADO: …` to you. In range → creates the checkout, sets `pago_enviado`. |
+| `avisar_humano(motivo, pregunta)` | Soft handoff. Logs `aviso_humano`, you keep selling. |
+| `handoff_humano(motivo, resumen)` | Hard handoff. Sets `handoff`, the channel closes. |
+
+Also harness-side, before your agent ever sees the message: **opt-out detection** (a matching message ends the conversation permanently — you never get to reply to it) and **link sanitizing** on every bubble you emit (a URL from outside the known providers is replaced and logged as `guardrail:link_inventado`, i.e. a violation).
+
+You get no database, no Stripe keys, no HMAC. You bring the agent: prompt, brain, decisions. That's the part being measured.
+
+## Reference entrants
+
+Four, all passing the identical dry suite (same scripted brain, same five outcomes). Read whichever is closest to your stack:
+
+| Entrant | Lines | Notes |
+|---|---:|---|
+| [`adapters/http-agent.ts`](../adapters/http-agent.ts) | 88 | Node, zero deps. The default under `--protocol http`. |
+| [`adapters/http_agent.py`](../adapters/http_agent.py) | 90 | Python **stdlib only** — `urllib` + `http.server`. No pip install. |
+| [`adapters/openai_agent.py`](../adapters/openai_agent.py) | 80 | Official `openai` client, any OpenAI-compatible endpoint. |
+| [`adapters/langchain_agent.py`](../adapters/langchain_agent.py) | 79 | `langchain-openai`. |
+
+```bash
+SUT_CMD="python3 adapters/openai_agent.py" npm run bench:dry:http   # free, no keys
+```
+
+### Frameworks that own the agent loop
+
+LangChain here is used as a **chat model with bound tools**, not as an `AgentExecutor`. That distinction is the whole design.
+
+Frameworks like the **OpenAI Agents SDK** or LangGraph's prebuilt `ToolNode` are built to *execute the tools themselves*. Under Closed conformance they cannot: the price guardrail, the opt-out and the link sanitizer must be **identical for every entrant**, or the leaderboard stops comparing agents and starts comparing who wrote the laxest `crear_pago`. So an adapter binds the tool **schemas** and returns the `tool_call` upward, never invoking it.
+
+If your framework refuses to yield its loop, you have two honest options: drive its underlying chat-model client directly (what these adapters do), or enter under `--protocol webhook` as **Open** conformance, implement the guardrails yourself, and accept that your score sits in a different column.
+
+### Slow-booting agents
+
+The runner waits for `GET /health` for **60 s** by default, then gives up. Importing LangChain alone costs ~12 s; a local model costs more. Raise it with `SUT_BOOT_TIMEOUT_MS=180000`.
+
+## Conformance levels
+
+- **Closed** (`--protocol http`) — buyer, policy, and toolset are fixed by CloseBench. The only variable is your agent, so scores compare agents. This is the default and the one that belongs on a leaderboard.
+- **Open** (`--protocol webhook` with your own scaffolding, retrieval, fine-tune, or tools) — more freedom, less comparability.
+
+They are **scored separately and never mixed**, following MLPerf's Closed/Open split. Every report stamps the protocol it ran under.
