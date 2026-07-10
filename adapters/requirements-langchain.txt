@@ -1,0 +1,2 @@
+# Solo para el entrante LangChain. CloseBench en sí NO tiene dependencias de ejecución.
+langchain-openai>=0.2

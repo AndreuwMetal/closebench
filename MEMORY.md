@@ -19,6 +19,7 @@ Selling is the agentic task that touches money and makes promises, and it had no
 - **`pass^k`, not single-shot.** Reliability across k runs (τ-bench). A sales agent that closes 1-in-3 tries is not "good sometimes", it's unreliable.
 - **Cost is a metric.** \$/conversation from real tokens. A closer at \$2/conv loses to one at \$0.03.
 - **Adapter seam = one env var (`SUT_CMD`).** This is what turns a project test suite into a *benchmark*: any agent, any stack, plugs in. The bundled reference agent is just the default entrant.
+- **Two protocols, one policy.** `webhook` (agent owns tools/state — "Open" conformance) and `http` (agent answers `POST /message` with a message-or-tool_call; CloseBench owns tools, guardrails and state — "Closed"). Both import `lib/policy.ts`: if the guardrails were duplicated, the same agent would score differently by door and the benchmark would lie. The dry suite runs over both and must match.
 - **Dry-first.** `npm run bench:dry` validates the entire pipeline with zero keys/cost. It's the CI smoke test and the contributor's first command. Never let it go red.
 - **Two tracks.** Main = agentic (tools). Secondary = bilateral negotiation (model vs model, no tools; PACT/AgenticPay). Keep them separate; don't conflate a reasoning baseline with the full exam.
 - **Judge = Opus 4.8, Buyer = Sonnet 5 (≠ seller).** Judge and simulated buyer are *different* models from the agent's brain, to avoid self-preference bias.
@@ -33,7 +34,10 @@ Selling is the agentic task that touches money and makes promises, and it had no
 - `npm run kappa` computes judge–human **% agreement + Cohen's κ** from the *blind* 10% sample. The old template asked "do you agree with the judge?" — that measures deference, not agreement, and makes κ impossible.
 - Zero runtime dependencies. **Node ≥ 24** (native TS, `node:sqlite`).
 - Bundled reference agent + bad-prompt control (discrimination check).
-- **Not yet:** the human labels themselves (→ κ report → `CloseBench-Verified`), public leaderboard, held-out/hidden set, language-agnostic HTTP adapter. See [docs/ROADMAP.md](docs/ROADMAP.md).
+- **Language-agnostic HTTP adapter shipped** (`--protocol http`, `npm run bench:dry:http`). Four reference entrants pass the identical dry suite: Node, Python stdlib, official `openai` client, LangChain. A Python agent needs one endpoint and no database.
+- **Frameworks that own the agent loop can't be Closed-conformant.** OpenAI Agents SDK / LangGraph `ToolNode` execute the tools themselves; then the guardrails differ per entrant and the board compares whoever wrote the laxest `crear_pago`. Adapters bind tool *schemas* and return the `tool_call` upward. If a framework won't yield its loop → `--protocol webhook`, Open conformance, different column.
+- **Two defects the framework adapters exposed:** the dry brain returned a malformed OpenAI response (hand-written clients tolerated it, pydantic-backed SDKs rejected it), and the runner's boot budget was 10 s while importing LangChain takes ~12 s — silently excluding the frameworks Stage 2 exists to support. Now 60 s, `SUT_BOOT_TIMEOUT_MS` to override.
+- **Not yet:** the human labels themselves (→ κ report → `CloseBench-Verified`), public leaderboard, held-out/hidden set, Docker, reference adapters for OpenAI/LangChain. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Provenance
 
@@ -43,7 +47,8 @@ Extracted from **[CloseForge](https://github.com/AndreuwMetal/closeforge)** (a W
 
 - Inline code comments: **Spanish** (inherited from CloseForge). Docs, README, and commit messages: **English** (public-facing reach).
 - No dependencies. If a builtin does it, use the builtin.
-- Every non-trivial change keeps `bench:dry` green — that's the runnable check.
+- Every non-trivial change keeps `npm run bench:dry:all` green (webhook · http · python) — that's the runnable check. The two protocols must produce *identical* dry results; if they diverge, a guardrail got duplicated instead of shared.
+- **The README stage table is the public status surface.** When a roadmap item flips state, update `docs/ROADMAP.md` *and* the table in `README.md` in the same commit. A README claiming a stage that isn't done is the fastest way to lose a benchmark's credibility.
 
 ## Open questions / next decisions
 

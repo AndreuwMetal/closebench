@@ -57,7 +57,8 @@ function kappa(pares: Par[]): { po: number; k: number } {
 }
 
 const fmt = (x: number) => (Number.isNaN(x) ? "— (sin varianza: una sola clase)" : x.toFixed(3));
-console.log(`\nCloseBench — acuerdo juez–humano · dataset ${corrida.digest ?? "?"} · cerebro ${corrida.cerebro}`);
+const m = corrida.manifiesto ?? {};
+console.log(`\nCloseBench — acuerdo juez–humano · dataset ${m.dataset?.digest ?? "?"} · cerebro ${m.modelos?.cerebro ?? "?"} · juez ${m.modelos?.juez ?? "?"}`);
 console.log(`Muestra: ${pares.exito.length} corridas etiquetadas${sinEtiquetar ? ` (${sinEtiquetar} sin etiquetar, ignoradas)` : ""}\n`);
 for (const dim of ["exito", "violacion"] as const) {
   const { po, k } = kappa(pares[dim]);

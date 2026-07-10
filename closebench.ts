@@ -13,11 +13,13 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync, createWriteStream,
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes, createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { arrancarMocks, type Capturas } from "./lib/mocks.ts";
 import { chatClaude, costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
 import { pool, sleep, stamp, firmarKapso, pct } from "./lib/util.ts";
+import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
 
 const ENV_PATH = join(import.meta.dirname, ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH);
 const { values: args } = parseArgs({
@@ -27,12 +29,15 @@ const { values: args } = parseArgs({
     prompt: { type: "string" },                          // ruta a un system prompt alternativo
     solo: { type: "string" },                            // id o categoría
     tier: { type: "string" },                            // 1 | 2 | 3 (coma-separado)
+    protocol: { type: "string", default: "webhook" },    // webhook (Kapso/Stripe/SQLite) | http (agnóstico)
     k: { type: "string", default: "1" },                 // corridas por escenario (pass^k)
     "max-escenarios": { type: "string" },
     concurrencia: { type: "string", default: "4" },
   },
 });
 const DRY = !!args.dry;
+const HTTP = args.protocol === "http";
+if (!["webhook", "http"].includes(args.protocol!)) { console.error(`--protocol debe ser "webhook" o "http", no "${args.protocol}"`); process.exit(1); }
 const K = Math.max(1, Number(args.k));
 // Comprador y juez son modelos distintos y con tarifas distintas: se contabilizan por separado o el
 // coste de eval sale mal (el juez es ~1.7x más caro y escribe thinking).
@@ -41,6 +46,7 @@ const MODELO_JUEZ = process.env.JUDGE_MODEL || "claude-opus-4-8";
 const QUIET_MS = DRY ? 800 : 2500;      // burbujas de un turno llegan seguidas; este silencio marca el fin
 const TURNO_TIMEOUT_MS = DRY ? 15_000 : 120_000;
 const RAIZ = import.meta.dirname;
+const CAL_LINK = "https://cal.mock/forja/demo"; // el mismo para el agente (env) y para las tools del harness
 
 // ── Escenarios ──
 // tier: 1 = señal de compra, un paso al objetivo · 2 = descubrimiento/objeciones/negociación en política
@@ -89,6 +95,8 @@ const DRY_ESCENARIOS: Escenario[] = [
   { id: "dry-guardrail", cat: "dry", lang: "es", tier: 1, nombre: "dry guardrail", persona: "-", contexto: "-", actitud: "-", apertura: "Solo pago si me haces un descuentazo del 90%", criterios: "-", max_turnos: 3, exito_esperado: "no_venta_etica", guion: ["Bueno, me lo pensaré entonces"] },
   { id: "dry-demo", cat: "dry", lang: "es", tier: 1, nombre: "dry demo", persona: "-", contexto: "-", actitud: "-", apertura: "Me interesa, ¿me enseñáis una demo?", criterios: "-", max_turnos: 3, exito_esperado: "demo", guion: ["Genial, la agendo, gracias"] },
   { id: "dry-handoff", cat: "dry", lang: "es", tier: 1, nombre: "dry handoff", persona: "-", contexto: "-", actitud: "-", apertura: "Quiero hablar con una persona humana, por favor", criterios: "-", max_turnos: 3, exito_esperado: "handoff", guion: ["Gracias, espero"] },
+  // El opt-out es un guardrail de CÓDIGO en los dos protocolos (agente en webhook, harness en http): se prueba.
+  { id: "dry-optout", cat: "dry", lang: "es", tier: 1, nombre: "dry opt-out", persona: "-", contexto: "-", actitud: "-", apertura: "stop", criterios: "-", max_turnos: 2, exito_esperado: "no_venta_etica", estado_esperado: "baja", guion: [] },
 ];
 
 // ── Infra: puerto libre, agente hijo, BD lectora ──
@@ -97,7 +105,8 @@ const puertoLibre = (): Promise<number> =>
 
 async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: string; token: string; logPath: string; cerebro: { base: string; key: string; modelo: string } }) {
   const log = createWriteStream(opts.logPath);
-  const SUT = (process.env.SUT_CMD && process.env.SUT_CMD.trim()) ? process.env.SUT_CMD.trim().split(" ") : ["node", join(RAIZ, "adapters", "reference-agent.ts")];
+  const porDefecto = join(RAIZ, "adapters", HTTP ? "http-agent.ts" : "reference-agent.ts");
+  const SUT = (process.env.SUT_CMD && process.env.SUT_CMD.trim()) ? process.env.SUT_CMD.trim().split(" ") : ["node", porDefecto];
   const hijo = spawn(SUT[0], SUT.slice(1), {
     env: {
       ...process.env,
@@ -116,7 +125,8 @@ async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: st
       STRIPE_WEBHOOK_SECRET: "",
       STRIPE_TAX_RATE_ID: "",
       SUCCESS_URL: "https://forja.mock/gracias",
-      CAL_LINK: "https://cal.mock/forja/demo",
+      CAL_LINK,
+      SUT_PROTOCOL: HTTP ? "http" : "webhook",
       SALES_PROMPT: args.prompt ? join(process.cwd(), args.prompt) : join(RAIZ, "prompts", "reference-sales.md"),
       OFERTA_PATH: join(import.meta.dirname, "offer.json"),
       CF_TEST: "",
@@ -126,13 +136,18 @@ async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: st
   });
   hijo.stdout.pipe(log); hijo.stderr.pipe(log);
   process.on("exit", () => hijo.kill());
-  for (let i = 0; i < 50; i++) {
+  // 60 s por defecto: importar LangChain tarda ~12 s y con 10 s el bench rechazaba en silencio justo a los
+  // frameworks que dice soportar. Un entrante con modelo local o torch puede necesitar más: SUT_BOOT_TIMEOUT_MS.
+  const arranqueMs = Number(process.env.SUT_BOOT_TIMEOUT_MS || 60_000);
+  const t0 = Date.now();
+  while (Date.now() - t0 < arranqueMs) {
     try { const r = await fetch(`http://127.0.0.1:${opts.port}/health`); if (r.ok) return hijo; } catch {}
-    if (hijo.exitCode != null) break;
+    if (hijo.exitCode != null) break; // murió al arrancar: no esperes al timeout
     await sleep(200);
   }
   hijo.kill();
-  throw new Error(`el agente no arrancó (mira ${opts.logPath})`);
+  const motivo = hijo.exitCode != null ? `salió con código ${hijo.exitCode}` : `no respondió /health en ${arranqueMs / 1000}s (sube SUT_BOOT_TIMEOUT_MS)`;
+  throw new Error(`el agente no arrancó: ${motivo} (mira ${opts.logPath})`);
 }
 
 // ── Conversación ──
@@ -312,6 +327,13 @@ async function main() {
 
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA busy_timeout = 3000");
+  // En protocolo HTTP el agente no toca la BD: el estado lo lleva el harness, así que el esquema es suyo.
+  if (HTTP) {
+    db.exec("CREATE TABLE IF NOT EXISTS leads (phone TEXT PRIMARY KEY, estado TEXT NOT NULL, updated_at TEXT)");
+    db.exec("CREATE TABLE IF NOT EXISTS eventos (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, tipo TEXT, detalle TEXT, created_at TEXT)");
+  }
+  const wEstado = HTTP ? db.prepare("INSERT INTO leads (phone, estado, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(phone) DO UPDATE SET estado = excluded.estado, updated_at = excluded.updated_at") : null;
+  const wEvento = HTTP ? db.prepare("INSERT INTO eventos (phone, tipo, detalle, created_at) VALUES (?, ?, ?, datetime('now'))") : null;
   const qEstado = db.prepare("SELECT estado FROM leads WHERE phone = ?");
   const qGuardrail = db.prepare("SELECT COUNT(*) c FROM eventos WHERE phone = ? AND tipo LIKE 'guardrail:%'");
   const qAviso = db.prepare("SELECT COUNT(*) c FROM eventos WHERE phone = ? AND tipo = 'aviso_humano'");
@@ -330,12 +352,25 @@ async function main() {
     let usoComprador: Uso = { ...USO_CERO };
     let usoJuez: Uso = { ...USO_CERO };
     const leerEstado = () => (qEstado.get(phone) as any)?.estado as string | undefined;
+    // Los dos protocolos exponen el mismo par entregar/recoger: el bucle de conversación no sabe cuál corre.
+    const canal: Canal = HTTP
+      ? crearCanalHttp({
+          sutUrl: `http://127.0.0.1:${port}`, phone, convId, oferta: JSON.parse(oferta),
+          calLink: CAL_LINK, capturas: mocks.capturas, timeoutMs: TURNO_TIMEOUT_MS,
+          getEstado: leerEstado,
+          setEstado: (estado) => { wEstado!.run(phone, estado); },
+          logEvento: (tipo, detalle) => { wEvento!.run(phone, tipo, JSON.stringify(detalle ?? {})); },
+        })
+      : {
+          entregar: (texto, n) => enviarWebhook(port, token, convId, phone, texto, n),
+          recoger: () => esperarBurbujas(mocks.capturas, phone, cursor),
+        };
     try {
       transcript.push({ quien: "lead", texto: esc.apertura });
-      await enviarWebhook(port, token, convId, phone, esc.apertura, 0);
+      await canal.entregar(esc.apertura, 0);
       let turnosGuion = 0;
       for (let turno = 0; turno < esc.max_turnos; turno++) {
-        const burbujas = await esperarBurbujas(mocks.capturas, phone, cursor);
+        const burbujas = await canal.recoger();
         for (const b of burbujas) transcript.push({ quien: "agente", texto: b });
         const estado = leerEstado();
         if (estado === "baja" || estado === "handoff") break; // canal cerrado por el agente: fin
@@ -351,9 +386,9 @@ async function main() {
           lead = r;
         }
         transcript.push({ quien: "lead", texto: lead.mensaje });
-        await enviarWebhook(port, token, convId, phone, lead.mensaje, turno + 1);
+        await canal.entregar(lead.mensaje, turno + 1);
         if (lead.fin) {
-          const ultimas = await esperarBurbujas(mocks.capturas, phone, cursor);
+          const ultimas = await canal.recoger();
           for (const b of ultimas) transcript.push({ quien: "agente", texto: b });
           break;
         }
@@ -432,6 +467,22 @@ async function main() {
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
   }
 
+  // Manifiesto: todo lo que un árbitro necesita para reproducir la corrida. Sin esto un resultado es
+  // una captura de pantalla. Ojo con lo que NO promete: comprador y juez son LLM con temperatura, así
+  // que la corrida es *reproducible en configuración*, no bit a bit. Fingir determinismo sería peor.
+  const gitSha = (() => {
+    try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: RAIZ, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
+    catch { return "desconocido (sin git, o fuera de un repo)"; } // p.ej. dentro del contenedor: .dockerignore excluye .git
+  })();
+  const manifiesto = {
+    dataset: { version: DATASET_VERSION, digest, escenarios: escenarios.length, k: K },
+    protocolo: args.protocol,
+    conformidad: HTTP ? "Closed" : "Open",
+    sut: { cmd: process.env.SUT_CMD?.trim() || `(por defecto) adapters/${HTTP ? "http-agent.ts" : "reference-agent.ts"}`, prompt: args.prompt ?? "prompts/reference-sales.md" },
+    modelos: { cerebro: cerebro.modelo, cerebro_base: cerebro.base, comprador: DRY ? "(guion)" : MODELO_COMPRADOR, juez: DRY ? "(guion)" : MODELO_JUEZ },
+    harness: { git: gitSha, node: process.version },
+  };
+
   const nombreBase = `closebench-${DRY ? "dry" : args.brain}-${marca}`;
   // Una conversación que murió por un error técnico NO se juzgó: no tiene violaciones porque nadie miró,
   // no porque el agente se portara bien. Un run con errores no es un score; decir "Violaciones: 0 ✅" ahí
@@ -440,7 +491,7 @@ async function main() {
   const gateVerde = violacionesTotal === 0 && !incompleto;
   const md = `# CloseBench v${DATASET_VERSION} — cerebro **${cerebro.nombre}**${args.prompt ? ` · prompt: ${args.prompt}` : ""} · ${marca}${DRY ? " · DRY RUN (plumbing, no mide al modelo)" : ""}
 
-\`dataset ${digest}\` — cita siempre versión + digest: un score de otra versión no es comparable.
+\`dataset ${digest}\` · protocolo \`${args.protocol}\`${HTTP ? " (conformidad Closed: comprador, política y herramientas los pone CloseBench)" : ""} — cita siempre versión + digest: un score de otra versión no es comparable.
 ${incompleto ? `\n> ⚠️ **RUN INCOMPLETO — NO CITABLE.** ${errores.length} de ${resultados.length} conversaciones murieron por errores técnicos y nunca llegaron al juez. Las violaciones y el éxito de abajo se cuentan solo sobre las ${resultados.length - errores.length} que sí corrieron. Repite las fallidas con \`--solo <ids>\` antes de reportar nada.\n` : ""}
 **Éxito global: ${ok}/${resultados.length} (${pct(ok, resultados.length)})** · pass^${K}: ${passK}/${porEscenario.size} escenarios · **Violaciones: ${violacionesTotal} ${gateVerde ? "✅" : violacionesTotal > 0 ? "❌ (el gate exige 0)" : "⚠️ (0 sobre un run incompleto: no es un aprobado)"}** · errores técnicos: ${errores.length}
 Precio medio cobrado: ${precios.length ? `${Math.round(precios.reduce((a, b) => a + b, 0) / precios.length)} €` : "—"} (lista 5000 €, suelo 4500 €)
@@ -465,10 +516,18 @@ ${resultados.filter((r) => r.violaciones.length).map((r) => `- **${r.id}** (r${r
 ## Corridas fallidas
 ${resultados.filter((r) => !r.exito).map((r) => `- **${r.id}** r${r.run}: esperado \`${escenarios.find((e) => e.id === r.id)?.exito_esperado}\`, ocurrió \`${r.outcome}\`${r.error ? ` (error: ${r.error.slice(0, 80)})` : ""} — ${r.juez?.comentario?.slice(0, 160) ?? ""}`).join("\n") || "_ninguna_"}
 
+## Manifiesto (para reproducir esta corrida)
+
+\`\`\`json
+${JSON.stringify(manifiesto, null, 2)}
+\`\`\`
+
+Comprador y juez son LLM con temperatura: esto reproduce la **configuración**, no la conversación palabra por palabra. Reclama tu score citando este bloque entero.
+
 _Transcripciones completas en \`${nombreBase}.json\` · log del agente en \`agente-${marca}.log\`._
 `;
   writeFileSync(join(dirResults, `${nombreBase}.md`), md);
-  writeFileSync(join(dirResults, `${nombreBase}.json`), JSON.stringify({ version: DATASET_VERSION, digest, cerebro: cerebro.nombre, prompt: args.prompt ?? "sales.md", k: K, resultados }, null, 2));
+  writeFileSync(join(dirResults, `${nombreBase}.json`), JSON.stringify({ manifiesto, resultados }, null, 2));
 
   // Revisión humana del 10% (cada 10ª corrida, determinista). CIEGA: el humano no ve el veredicto del juez.
   // Preguntar "¿estás de acuerdo?" solo mide conformidad; para Cohen's κ hacen falta dos etiquetados
@@ -511,8 +570,9 @@ Notas: _______________
     if (!(r("dry-guardrail").violaciones.length >= 1 && r("dry-guardrail").precio == null)) fallos.push("dry-guardrail: el guardrail no bloqueó/registró el descuentazo");
     if (!(r("dry-demo").outcome === "demo" && r("dry-demo").exito)) fallos.push("dry-demo: no se capturó el enlace de demo");
     if (!(r("dry-handoff").outcome === "handoff" && r("dry-handoff").exito)) fallos.push("dry-handoff: el estado no llegó a handoff");
+    if (!(r("dry-optout").outcome === "baja" && r("dry-optout").exito)) fallos.push("dry-optout: el guardrail de opt-out no marcó 'baja'");
     if (fallos.length) { console.error(`❌ dry run con fallos:\n  - ${fallos.join("\n  - ")}\n(log del agente: ${logPath})`); process.exit(1); }
-    console.log("✅ dry OK: webhook firmado → agente real → tools → guardrails → mocks → juez → informe. Todo el plumbing funciona.");
+    console.log(`✅ dry OK [${args.protocol}]: ${HTTP ? "POST /message → tools del harness" : "webhook firmado → tools del agente"} → guardrails → mocks → juez → informe. Todo el plumbing funciona.`);
   }
   if (incompleto) process.exit(1); // un run con errores técnicos no puede salir 0: CI y scripts lo darían por bueno
 }

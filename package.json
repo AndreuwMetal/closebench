@@ -10,6 +10,10 @@
   "scripts": {
     "bench": "node closebench.ts",
     "bench:dry": "node closebench.ts --dry --concurrencia 2",
+    "bench:dry:http": "node closebench.ts --dry --protocol http --concurrencia 2",
+    "bench:dry:python": "SUT_CMD='python3 adapters/http_agent.py' node closebench.ts --dry --protocol http --concurrencia 2",
+    "bench:dry:all": "npm run bench:dry && npm run bench:dry:http && npm run bench:dry:python",
+    "bench:http": "node closebench.ts --protocol http",
     "bench:opus": "node closebench.ts --brain opus",
     "bench:bad": "node closebench.ts --prompt prompts/bad.md --solo redteam,regateo,objeciones",
     "kappa": "node kappa.ts",

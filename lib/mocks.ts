@@ -52,9 +52,19 @@ export function arrancarMocks(): Promise<{ port: number; capturas: Capturas; cer
 // Cerebro guionizado (solo --dry): dispara por palabras clave las 4 rutas — pago, guardrail, demo, handoff.
 function cerebroGuion(body: any, n: number) {
   const ultimo = (body.messages ?? []).at(-1);
+  // Respuesta OpenAI COMPLETA: los clientes escritos a mano toleran un objeto parcial, pero un SDK real
+  // (openai-python, LangChain) lo valida con pydantic y lo rechaza. `created` es fijo: el dry es determinista.
   const responder = (content: string | null, tool_calls?: any[]) => ({
-    choices: [{ message: { role: "assistant", content, ...(tool_calls ? { tool_calls } : {}) } }],
-    usage: { prompt_tokens: 50, completion_tokens: 20 },
+    id: `chatcmpl-mock${n}`,
+    object: "chat.completion",
+    created: 1_700_000_000,
+    model: body.model ?? "glm-5.2",
+    choices: [{
+      index: 0,
+      finish_reason: tool_calls ? "tool_calls" : "stop",
+      message: { role: "assistant", content, ...(tool_calls ? { tool_calls } : {}) },
+    }],
+    usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70 },
   });
   const llamar = (name: string, args: unknown) =>
     responder(null, [{ id: `call_${n}`, type: "function", function: { name, arguments: JSON.stringify(args) } }]);

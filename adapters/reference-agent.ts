@@ -6,6 +6,8 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHmac, timingSafeEqual } from "node:crypto";
+// La política vive en lib/policy.ts, compartida con el adaptador HTTP: mismos límites por los dos caminos.
+import { sueloPrecio as sueloDe, aUnidadMinima, OPT_OUT_RE, sanitizarLinks as sanitizar, hostsPermitidos } from "../lib/policy.ts";
 
 { const ENV_PATH = join(import.meta.dirname, "..", ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH); }
 const env = (k: string, fallback = "") => process.env[k] || fallback; // || y no ??: en .env una var vacía cuenta como no puesta
@@ -93,17 +95,7 @@ export const estadoDe = (phone: string) => (getLead.get(phone) as any)?.estado a
 const oferta = () => JSON.parse(readFileSync(OFERTA_PATH, "utf8"));
 // ponytail: sin tool get_oferta — la oferta ya viaja entera en el system prompt (se relee en cada turno)
 
-// El tope de descuento se calcula fallando CERRADO: oferta corrupta ⇒ no se puede cobrar.
-function sueloPrecio(): { lista: number; minimo: number; moneda: string; nombre: string } | { error: string } {
-  const o = oferta();
-  const lista = Number(o?.precios?.precio_lista);
-  if (!Number.isFinite(lista) || lista <= 0) return { error: "la oferta no tiene precio de lista válido. No puedes cobrar." };
-  const raw = o?.precios?.descuento_maximo_pct;
-  const topePct = raw == null ? 0 : Number(raw);
-  if (!Number.isFinite(topePct) || topePct < 0 || topePct > 100)
-    return { error: "descuento_maximo_pct inválido en la oferta. No puedes cobrar hasta que se corrija; ofrece handoff_humano." };
-  return { lista, minimo: lista * (1 - topePct / 100), moneda: String(o?.precios?.moneda || "EUR"), nombre: String(o?.servicio?.nombre || "Servicio") };
-}
+const sueloPrecio = () => sueloDe(oferta());
 
 const TOOLS = [
   {
@@ -159,11 +151,6 @@ const TOOLS = [
     },
   },
 ];
-
-// Monedas sin decimales en Stripe: su unidad mínima NO son céntimos.
-const SIN_DECIMALES = new Set(["jpy", "krw", "clp", "pyg", "vnd", "xaf", "xof", "bif", "djf", "gnf", "kmf", "mga", "rwf", "ugx", "vuv", "xpf"]);
-const aUnidadMinima = (importe: number, moneda: string) =>
-  Math.round(SIN_DECIMALES.has(moneda.toLowerCase()) ? importe : importe * 100);
 
 // Crea una Checkout Session con el importe NEGOCIADO (ya validado): el lead paga exactamente ese precio.
 // invoice_creation → Stripe genera la factura y la emaila al correo que el lead indique (requiere activar
@@ -330,30 +317,13 @@ async function reply(conversationId: string, phone: string, text: string) {
   }
 }
 
-// GUARDRAIL en código: el modelo NO puede colar enlaces que no vengan de una tool (p.ej. inventarse
-// un calendly). Solo pasan los proveedores conocidos (Cal configurado, Stripe) y el sitio web de la empresa.
-const hostDe = (u: string) => u.replace(/^https?:\/\//i, "").replace(/[\/?#:].*/, "").toLowerCase();
-// Con esquema (https://…) O dominio pelado con path (calendly.com/x): GLM manda el link SIN https y se
-// colaba. El path (/ o ?) evita falsos positivos con prose ("lo vemos.Un abrazo", "forja S.L.").
-const URL_RE = /https?:\/\/[^\s<>()«»]+|(?:[a-z0-9-]+\.)+[a-z]{2,}[\/?][^\s<>()«»]*/gi;
-const HOSTS_LINK_OK = new Set(
-  [CAL_LINK, STRIPE_PAYMENT_LINK].filter(Boolean).map(hostDe).concat(["checkout.stripe.com", "buy.stripe.com"])
-);
+// GUARDRAIL en código (lógica en lib/policy.ts): el modelo NO puede colar enlaces que no vengan de una
+// tool (p.ej. inventarse un calendly). Solo pasan los proveedores conocidos y el sitio web de la empresa.
 export function sanitizarLinks(texto: string, phone: string): string {
   let web = "";
-  try { web = hostDe(String(oferta().empresa?.web || "")); } catch {}
-  return texto.replace(URL_RE, (u) => {
-    const h = hostDe(u.replace(/[.,;:!?]+$/, ""));
-    if (HOSTS_LINK_OK.has(h) || (web && (h === web || h === "www." + web))) return u;
-    logEvento(phone, "guardrail:link_inventado", { url: u });
-    return "«te paso el enlace correcto en un momento»";
-  });
+  try { web = String(oferta().empresa?.web || ""); } catch {}
+  return sanitizar(texto, hostsPermitidos(CAL_LINK, STRIPE_PAYMENT_LINK, web), (url) => logEvento(phone, "guardrail:link_inventado", { url }));
 }
-
-// Opt-out amplio (ES/EN); frases explícitas y lookahead para no dar falsos positivos
-// ("dar de baja MI WEB" o "darme de baja DE mi agencia" hablan de otra cosa — la baja aquí es terminal).
-export const OPT_OUT_RE =
-  /(^\s*(baja|stop|unsubscribe)[\s.!]*$)|dar(me)? de baja(?!\s+(de|del|en|mi|tu|su|la|el|los|las|un|una)\b)|no me (escribas|escriban|escrib[aá]is|contactes|contacten|contact[eé]is)|deja[d]? de escribir(me)?|no quiero que me (escrib|contact)|unsubscribe|remove me|stop (messaging|texting|contacting)/i;
 
 async function handleEvent(payload: any) {
   const msg = payload.message;

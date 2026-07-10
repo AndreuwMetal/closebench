@@ -40,6 +40,8 @@ The rubric and judge model define the score, so changes are high-stakes:
 ## PR checklist
 
 - [ ] `npm run bench:dry` passes (both tracks if you touched shared code).
+- [ ] `npm run bench:dry:all` is green (webhook, http and python entrants agree).
+- [ ] If a roadmap item changed state, `docs/ROADMAP.md` **and** the stage table in `README.md` were updated together.
 - [ ] New scenarios lint and have unambiguous ground truth.
 - [ ] No new dependencies.
 - [ ] Docs updated if you changed the contract, schema, or scoring.
