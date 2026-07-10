@@ -18,7 +18,7 @@ A good scenario is **realistic, discriminative, and unambiguous**:
 - **Unambiguous ground truth** — you can state exactly what the correct outcome is and why. Put the buyer's private accept/leave logic in `criterios`, and edge-case guidance for the judge in `notas_juez`.
 
 Steps:
-1. Add the object to `scenarios/<category>.json` (schema in [docs/SCENARIOS.md](docs/SCENARIOS.md)). Unique `id`.
+1. Add the object to `scenarios/<category>.json` (schema in [docs/SCENARIOS.md](docs/SCENARIOS.md)). Unique `id`, and a `tier` (1 = easy close, 2 = discovery/objections, 3 = a wrong move is a *violation*).
 2. `npm run bench:dry` — the linter validates structure.
 3. `node closebench.ts --solo <id>` — a real single-scenario run (needs keys). Read the transcript: does the judge's verdict match your intended ground truth? If not, the scenario is ambiguous — fix it.
 4. Red-team scenarios (`redteam/`) are especially valuable: new ways to bait an agent into lying, inventing, or breaking policy.

@@ -34,9 +34,12 @@ cd closebench
 npm run bench:dry
 
 # 2. Real run: copy .env.example → .env, add keys, then:
-npm run bench            # 46 scenarios, GLM-5.2 reference brain, judged by Opus 4.8
+npm run bench            # 52 scenarios, GLM-5.2 reference brain, judged by Opus 4.8
 npm run bench:opus       # same agent, Opus brain (rival baseline) — compare
 npm run bench:bad        # deliberately bad prompt — the bench MUST score it worse
+
+node closebench.ts --tier 3                        # only the adversarial / policy-edge scenarios
+npm run kappa -- results/revision-humana-<ts>.md   # judge–human agreement + Cohen's κ
 ```
 
 Results land in [`results/`](results/): a `.md` summary, a `.json` with full transcripts, and a `revision-humana-*.md` sample for human calibration.
@@ -51,9 +54,13 @@ Results land in [`results/`](results/): a `.md` summary, a `.json` with full tra
 | **Naturalness / Discovery / Objections** | 0–10 judge rubric — did it sell like an excellent human (SPIN / Voss)? |
 | **Cost / conversation** | \$ per conversation from real token usage |
 
+Every score is broken down by **difficulty tier** — **L1** (a buy signal, one step to the close), **L2** (discovery, objections, in-policy negotiation), **L3** (adversarial or policy-edge, where a wrong move is a *violation*, not a lost sale). Closing an easy deal and staying honest under a bribe are not the same skill, and one average hides the difference.
+
+Results cite a frozen dataset: `CloseBench v1.0 (dataset 47bafe8b1009)`. The digest hashes the scenarios and the offer, so two scores with different digests were never taking the same exam.
+
 ## Two tracks
 
-- **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 46 scenarios.
+- **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 52 scenarios.
 - **Negotiation** (`npm run negotiation`) — a bilateral price-negotiation microbenchmark (model vs model, hidden reservation values, ZOPA / surplus-capture / correct-walkaway metrics). A pure-reasoning baseline, no tools. Adapted from the PACT / AgenticPay protocol.
 
 ## Benchmark *your* agent
@@ -81,7 +88,7 @@ Your agent implements a small, documented contract (a signed webhook in, tool si
 
 ## Status
 
-**v0.1 — working, self-contained, reproducible.** The harness runs green end-to-end; the dataset and leaderboard are being frozen and governed (see [ROADMAP](docs/ROADMAP.md)). Extracted from the [CloseForge](https://github.com/AndreuwMetal/closeforge) sales-agent project, from which the scenarios and rubric were battle-tested.
+**v0.1 harness · dataset v1.0 (frozen).** The harness runs green end-to-end and the scenario set is versioned, digested, and tiered. Still open before the number is fully trustworthy: the **judge–human agreement report** (tooling shipped, labeling pending) and `CloseBench-Verified`. See the [ROADMAP](docs/ROADMAP.md). Extracted from the [CloseForge](https://github.com/AndreuwMetal/closeforge) sales-agent project, from which the scenarios and rubric were battle-tested.
 
 ## License
 
