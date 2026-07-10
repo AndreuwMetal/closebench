@@ -23,13 +23,17 @@ Selling is the agentic task that touches money and makes promises, and it had no
 - **Two tracks.** Main = agentic (tools). Secondary = bilateral negotiation (model vs model, no tools; PACT/AgenticPay). Keep them separate; don't conflate a reasoning baseline with the full exam.
 - **Judge = Opus 4.8, Buyer = Sonnet 5 (≠ seller).** Judge and simulated buyer are *different* models from the agent's brain, to avoid self-preference bias.
 
-## Current state (v0.1)
+## Current state (harness v0.1 · dataset v1.0)
 
 - Harness runs **green end-to-end**, standalone, self-contained. Both tracks pass dry.
-- **46 scenarios**, 9 categories, ES 31 / EN 15. Canonical `offer.json` (€5,000 realtor site, 10% discount floor €4,500).
+- **52 scenarios**, 9 categories, ES 35 / EN 17. Canonical `offer.json` (€5,000 realtor site, 10% discount floor €4,500).
+- **Dataset frozen at v1.0** with a sha256 **digest** over `scenarios/*` + `offer.json`, stamped on every report. A score without version+digest is not citable.
+- **Difficulty tiers** L1/L2/L3 (4 / 26 / 22), reported separately. L3 = "a wrong move is a violation, not a lost sale" (all `redteam` + the discount/invention traps).
+- **Red-team = 15** scenarios. Beyond the classic sales baits it now covers the *agentic* attack surface: prompt injection, system-prompt/tool leak, authority spoofing, vulnerable lead, illegal request, competitor defamation. Judge taxonomy extended to match. Design note: in most red-team scenarios **honesty is the profitable answer** (refuse the bait → the buyer pays), so the gate can't be dismissed as a tax on selling.
+- `npm run kappa` computes judge–human **% agreement + Cohen's κ** from the *blind* 10% sample. The old template asked "do you agree with the judge?" — that measures deference, not agreement, and makes κ impossible.
 - Zero runtime dependencies. **Node ≥ 24** (native TS, `node:sqlite`).
 - Bundled reference agent + bad-prompt control (discrimination check).
-- **Not yet:** frozen versioned dataset, human-verified subset, public leaderboard, held-out/hidden set, language-agnostic HTTP adapter. See [docs/ROADMAP.md](docs/ROADMAP.md) — these are the stages to "referent".
+- **Not yet:** the human labels themselves (→ κ report → `CloseBench-Verified`), public leaderboard, held-out/hidden set, language-agnostic HTTP adapter. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Provenance
 
@@ -45,5 +49,5 @@ Extracted from **[CloseForge](https://github.com/AndreuwMetal/closeforge)** (a W
 
 - Leaderboard hosting + submission verification (self-report vs re-run). → [docs/GOVERNANCE.md](docs/GOVERNANCE.md)
 - Held-out set: how much stays public for iteration vs hidden for the official score.
-- Judge–human agreement target before v1.0 freeze (the 10% `revision-humana` sample feeds this).
+- Who labels the blind `revision-humana` samples, and how many, before publishing the first κ. (The freeze happened; the κ number is what still gates "the judge is a measure, not an opinion".)
 - Second domain beyond real-estate SaaS (B2B SaaS, insurance) to prove generality.

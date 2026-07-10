@@ -7,20 +7,22 @@ CloseBench is a working benchmark today. Becoming the *reference* sales benchmar
 ### Stage 0 — Working harness ✅ (v0.1, done)
 
 - End-to-end pipeline: signed webhook → real agent → tools → guardrails → mock services → judge → report.
-- 46 scenarios, 9 categories, bilingual. Canonical offer. Compliance gate. `pass^k`. Cost accounting.
+- 52 scenarios, 9 categories, bilingual. Canonical offer. Compliance gate. `pass^k`. Cost accounting.
 - Bundled reference agent + bad-prompt discrimination control.
 - Standalone, zero-dependency, `bench:dry` green. Public repo, MIT.
 
-### Stage 1 — Credible v1.0 dataset 🎯 (next)
+### Stage 1 — Credible v1.0 dataset 🎯 (in progress)
 
 *Goal: a number people trust.*
 
-- **Freeze `CloseBench v1.0`** — versioned, immutable scenario set. Scores cite a version.
-- **`CloseBench-Verified`** — a human-audited subset with clean, unambiguous ground truth (SWE-bench Verified's playbook). This becomes the headline number.
-- **Difficulty tiers (L1/L2/L3)** — ready-to-buy → multi-objection + tool use → hostile/ambiguous/policy-edge, so scores separate an easy close from a hard one (GAIA).
-- **Judge–human agreement report** — label the `revision-humana` samples, publish **% agreement + Cohen's κ**, and clear the bar serious LLM-judged benchmarks hold: **judge–human ≥ human–human** (MT-Bench: 85% ≥ 81%). Without this, the judge is just an opinion.
-- **Canary GUID** in the dataset so trainers can exclude it.
-- Expand red-team coverage — the compliance gate is the whole point, so adversarial scenarios get the most investment.
+- ✅ **Freeze `CloseBench v1.0`** — versioned scenario set. Every run hashes `scenarios/*.json` + `offer.json` into a **dataset digest** stamped on the report, so a score is only citable as `v1.0 (dataset <digest>)` and drift is impossible to hide.
+- ✅ **Difficulty tiers (L1/L2/L3)** — ready-to-buy → multi-objection + tool use → hostile/ambiguous/policy-edge (GAIA). Every scenario carries a `tier`, the report breaks the score down by it, and `--tier 3` runs the compliance gate alone. Currently 4 / 26 / 22.
+- ✅ **Canary GUID** in the dataset so trainers can exclude it.
+- 🔜 **Judge–human agreement report** — the *tooling* is in: the 10% sample is now labeled **blind** (the human never sees the judge), and `npm run kappa` reports **% agreement + Cohen's κ** on both `exito` and `violacion`. What's missing is the labeling itself. Bar to clear: **judge–human ≥ human–human** (MT-Bench: 85% ≥ 81%), κ > 0.6. Until it's published, the judge is just an opinion.
+- 🔜 **`CloseBench-Verified`** — a human-audited subset with clean, unambiguous ground truth (SWE-bench Verified's playbook), which becomes the headline number. Blocked on the labeling above: a scenario earns `verified` when independent humans agree on its ground truth *and* with the judge.
+- ✅ **Expand red-team coverage** — 9 → 15 scenarios, closing the gaps that mattered for an *agentic* seller: prompt injection, system-prompt / tool-inventory extraction, authority spoofing to bypass the price policy, an economically vulnerable lead begging for a guarantee, an illegal (fair-housing) request, and a bait to defame a competitor. The judge's violation taxonomy grew to match (injected instructions, internal-prompt leak, illegal/discriminatory compliance, financial advice). L3 is now 22 of 52.
+  - ✅ **Discrimination control re-run** after widening the rubric. On the 19 scenarios comparable across both runs: reference prompt **18/19 (95%), 0 violations**; `bad.md` **12/19 (63%), 14 violations**. The extra violation types made the judge neither lenient nor paranoid.
+  - ⚠️ **Pending, before any v1.0 score is published:** the 6 new red-team scenarios have only been linted, never played against a live judge (the validation run died on an API credit limit), so their ground truth is untested. Also suspect: `redteam-autoridad-01` was *passed* by the deliberately bad prompt, which handed off in 3 messages — its expected outcome is a handoff, so an agent that escalates everything passes by accident. Tighten it to require the judge confirm an explicit refusal, not just the final state.
 
 ### Stage 2 — Plug in any agent 🔌
 

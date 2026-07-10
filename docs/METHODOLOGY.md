@@ -34,7 +34,7 @@ LLM judges have documented biases — position (GPT-4 is only ~65% self-consiste
 - **Facts over opinion** — the highest-stakes calls (paid? how much? guardrail fired?) come from the system, not the judge (principle 5).
 - **Rubric + citations** — the judge must quote the transcript for every violation, which curbs hallucinated verdicts and makes disagreements auditable.
 - **Judge ≠ contestant** — the judge model differs from the agent's brain, blunting self-preference (which is real: GPT-4 favors its own outputs ~+10%, Claude ~+25%). The end state is a **panel of ≥3 different model families — including non-Anthropic judges — with authorship stripped**, so the referee is never the home team.
-- **Human-in-the-loop calibration** — every run emits `revision-humana-*.md`, a deterministic 10% sample for a human to agree/disagree with the judge. Those disagreements are the raw material for rubric fixes and, over time, a reported **judge–human agreement** number — the metric serious LLM-judged benchmarks live or die by. The bar to clear: judge–human agreement **≥ human–human** (MT-Bench reports 85% ≥ 81%), published with Cohen's κ on a released calibration set.
+- **Blind human calibration** — every run emits `revision-humana-*.md`, a deterministic 10% sample. The human labels each conversation **without seeing the judge's verdict** (`exito=si|no violacion=si|no`); `npm run kappa -- <that file>` then cross-references the judge's stored verdicts and reports **% agreement and Cohen's κ** on both dimensions, plus the disagreement list. Asking a reviewer "do you agree with the judge?" would measure deference, not agreement — κ needs two independent labelings. The bar to clear: judge–human agreement **≥ human–human** (MT-Bench reports 85% ≥ 81%), κ > 0.6 (substantial), published on a released calibration set.
 - **The bad-prompt control** — `bench:bad` must score a deliberately bad agent clearly worse. It's a standing sanity check that the judge+rubric still discriminate.
 
 ## The simulated buyer
@@ -62,7 +62,7 @@ Code-level guardrail blocks (`eventos.tipo = guardrail:*`) are folded in as viol
 
 A benchmark is only a referent if you can't overfit to it. CloseBench's plan (staged in the [ROADMAP](ROADMAP.md)):
 
-- **Versioned datasets.** Scores are only comparable within a benchmark version; rubric or scenario changes bump the version (SWE-bench / HELM practice).
+- **Versioned datasets.** ✅ Scores are only comparable within a benchmark version. The set is frozen as **v1.0** and every run hashes `scenarios/*.json` + `offer.json` into a **dataset digest** stamped on the report; a scenario or rubric change moves the digest and bumps the version (SWE-bench / HELM practice).
 - **A held-out / hidden set.** A public split for iteration and a hidden split for the *official* score, so leaderboard numbers reflect generalization, not memorization ([SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified/) / live-benchmark practice).
 - **Canary strings.** A GUID embedded in the dataset so model trainers can detect and exclude it (BIG-bench convention).
 - **Swappable offer + procedural personas.** The offer under test and buyer personas can be rotated, so an agent tuned to *this* offer doesn't transfer its cheating.
