@@ -9,17 +9,18 @@
 //       node eval/closebench.ts --solo redteam --k 2 --concurrencia 2
 import { parseArgs } from "node:util";
 import { spawn } from "node:child_process";
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, createWriteStream, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, createWriteStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { arrancarMocks, type Capturas } from "./lib/mocks.ts";
 import { chatClaude, costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
-import { pool, sleep, stamp, firmarKapso, pct } from "./lib/util.ts";
+import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/util.ts";
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
+import { cargarDataset, DATASET_VERSION, type Escenario, type Split } from "./lib/dataset.ts";
 
 const ENV_PATH = join(import.meta.dirname, ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH);
 const { values: args } = parseArgs({
@@ -33,11 +34,15 @@ const { values: args } = parseArgs({
     k: { type: "string", default: "1" },                 // corridas por escenario (pass^k)
     "max-escenarios": { type: "string" },
     concurrencia: { type: "string", default: "4" },
+    split: { type: "string", default: "public" },        // public (iteración) | hidden (score oficial, solo mantenedores)
+    out: { type: "string" },                             // directorio de salida (por defecto results/)
   },
 });
 const DRY = !!args.dry;
 const HTTP = args.protocol === "http";
 if (!["webhook", "http"].includes(args.protocol!)) { console.error(`--protocol debe ser "webhook" o "http", no "${args.protocol}"`); process.exit(1); }
+if (!["public", "hidden"].includes(args.split!)) { console.error(`--split debe ser "public" o "hidden", no "${args.split}"`); process.exit(1); }
+const SPLIT = args.split as Split;
 const K = Math.max(1, Number(args.k));
 // Comprador y juez son modelos distintos y con tarifas distintas: se contabilizan por separado o el
 // coste de eval sale mal (el juez es ~1.7x más caro y escribe thinking).
@@ -49,45 +54,8 @@ const RAIZ = import.meta.dirname;
 const CAL_LINK = "https://cal.mock/forja/demo"; // el mismo para el agente (env) y para las tools del harness
 
 // ── Escenarios ──
-// tier: 1 = señal de compra, un paso al objetivo · 2 = descubrimiento/objeciones/negociación en política
-//       3 = adversario, ambiguo o filo de política: un paso en falso es VIOLACIÓN, no solo venta perdida
-type Escenario = {
-  id: string; cat: string; lang: string; tier: 1 | 2 | 3; nombre: string; persona: string; contexto: string;
-  actitud: string; apertura: string; presupuesto_max?: number; criterios: string;
-  max_turnos: number; exito_esperado: "pago" | "demo" | "handoff" | "aviso" | "descalificar" | "no_venta_etica";
-  estado_esperado?: string; notas_juez?: string; guion?: string[];
-};
-
-// Versión congelada del dataset. El digest cubre escenarios + oferta: si algo cambia, el digest cambia
-// y las puntuaciones dejan de ser comparables. Un score sin versión+digest no es citable.
-const DATASET_VERSION = "1.0";
-
-function cargarEscenarios(): { escenarios: Escenario[]; digest: string } {
-  const dir = join(import.meta.dirname, "scenarios");
-  const todos: Escenario[] = [];
-  const hash = createHash("sha256");
-  for (const f of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
-    const crudo = readFileSync(join(dir, f), "utf8");
-    hash.update(crudo);
-    const arr = JSON.parse(crudo);
-    if (!Array.isArray(arr)) throw new Error(`${f}: se esperaba un array de escenarios`);
-    todos.push(...arr);
-  }
-  hash.update(readFileSync(join(import.meta.dirname, "offer.json")));
-  // linter mínimo: el bench no arranca con escenarios rotos
-  const ids = new Set<string>();
-  const EXITOS = ["pago", "demo", "handoff", "aviso", "descalificar", "no_venta_etica"];
-  for (const e of todos) {
-    for (const campo of ["id", "cat", "lang", "persona", "apertura", "criterios"] as const)
-      if (!e[campo] || typeof e[campo] !== "string") throw new Error(`escenario ${e.id ?? "?"}: falta el campo "${campo}"`);
-    if (ids.has(e.id)) throw new Error(`escenario duplicado: ${e.id}`);
-    ids.add(e.id);
-    if (![1, 2, 3].includes(e.tier)) throw new Error(`${e.id}: tier inválido (${e.tier}) — debe ser 1, 2 o 3`);
-    if (!Number.isInteger(e.max_turnos) || e.max_turnos < 1) throw new Error(`${e.id}: max_turnos inválido`);
-    if (!EXITOS.includes(e.exito_esperado)) throw new Error(`${e.id}: exito_esperado inválido (${e.exito_esperado})`);
-  }
-  return { escenarios: todos, digest: hash.digest("hex").slice(0, 12) };
-}
+// El tipo Escenario, el linter y el digest viven en lib/dataset.ts (una sola fuente de verdad,
+// compartida con submission.ts): la versión congelada del dataset se sella ahí.
 
 // Escenarios sintéticos del dry: ejercitan pago, guardrail, demo y handoff contra el cerebro guionizado.
 const DRY_ESCENARIOS: Escenario[] = [
@@ -293,7 +261,7 @@ function evaluarExito(esc: Escenario, outcome: string, juez: VeredictoJuez, esta
 // ── main ──
 async function main() {
   const marca = stamp();
-  const { escenarios: escenariosReales, digest } = cargarEscenarios(); // valida SIEMPRE (también en dry: linter de escenarios)
+  const { escenarios: escenariosReales, digest } = cargarDataset(SPLIT); // valida SIEMPRE (también en dry: linter de escenarios)
   let escenarios = DRY ? DRY_ESCENARIOS : escenariosReales;
   if (args.solo) { const sel = args.solo.split(",").map((s) => s.trim()); escenarios = escenarios.filter((e) => sel.includes(e.id) || sel.includes(e.cat)); }
   if (args.tier) { const sel = args.tier.split(",").map((s) => Number(s.trim())); escenarios = escenarios.filter((e) => sel.includes(e.tier)); }
@@ -317,7 +285,7 @@ async function main() {
   }
   if (!DRY && !process.env.ANTHROPIC_API_KEY) { console.error("Falta ANTHROPIC_API_KEY en .env (comprador y juez)"); process.exit(1); }
 
-  const dirResults = join(import.meta.dirname, "results");
+  const dirResults = args.out ?? join(import.meta.dirname, "results"); // --out: verify:submission corre en un scratch para no ensuciar results/
   mkdirSync(dirResults, { recursive: true });
   const dbPath = join(tmpdir(), `closebench-${marca}-${process.pid}.db`);
   const token = randomBytes(16).toString("hex");
@@ -341,7 +309,7 @@ async function main() {
 
   const oferta = readFileSync(join(import.meta.dirname, "offer.json"), "utf8");
   const corridas = escenarios.flatMap((esc) => Array.from({ length: K }, (_, r) => ({ esc, run: r + 1 })));
-  console.log(`CloseBench v${DATASET_VERSION} (dataset ${digest})${DRY ? " [DRY]" : ""} · cerebro: ${cerebro.nombre} · ${escenarios.length} escenarios × k=${K} = ${corridas.length} conversaciones (validados ${escenariosReales.length} escenarios reales)`);
+  console.log(`CloseBench v${DATASET_VERSION} (dataset ${digest}, split ${SPLIT})${DRY ? " [DRY]" : ""} · cerebro: ${cerebro.nombre} · ${escenarios.length} escenarios × k=${K} = ${corridas.length} conversaciones (validados ${escenariosReales.length} escenarios reales)`);
 
   let idxGlobal = 0;
   const resultados = await pool(corridas, Number(args.concurrencia), async ({ esc, run }): Promise<Resultado> => {
@@ -447,7 +415,7 @@ async function main() {
   const costeJuez = costeUSD(MODELO_JUEZ, usoJuezTotal);
   const porEscenario = new Map<string, Resultado[]>();
   for (const r of resultados) porEscenario.set(r.id, [...(porEscenario.get(r.id) ?? []), r]);
-  const passK = [...porEscenario.values()].filter((rs) => rs.every((r) => r.exito)).length;
+  const passK = [...passPorEscenario(resultados).values()].filter(Boolean).length;
   const cats = [...new Set(resultados.map((r) => r.cat))];
   const filaCat = (c: string) => {
     const rs = resultados.filter((r) => r.cat === c);
@@ -475,7 +443,9 @@ async function main() {
     catch { return "desconocido (sin git, o fuera de un repo)"; } // p.ej. dentro del contenedor: .dockerignore excluye .git
   })();
   const manifiesto = {
-    dataset: { version: DATASET_VERSION, digest, escenarios: escenarios.length, k: K },
+    dataset: { version: DATASET_VERSION, digest, split: SPLIT, escenarios: escenarios.length, k: K },
+    // dry explícito: un run de fontanería jamás debe poder colarse en un leaderboard como si midiera un agente
+    dry: DRY,
     protocolo: args.protocol,
     conformidad: HTTP ? "Closed" : "Open",
     sut: { cmd: process.env.SUT_CMD?.trim() || `(por defecto) adapters/${HTTP ? "http-agent.ts" : "reference-agent.ts"}`, prompt: args.prompt ?? "prompts/reference-sales.md" },
@@ -554,7 +524,7 @@ VERDICT ${r.id} r${r.run}: exito=? violacion=?
 Notas: _______________
 `).join("\n")}`);
 
-  console.log(`\n📄 results/${nombreBase}.md (+ .json, revision-humana-${marca}.md)`);
+  console.log(`\n📄 ${join(dirResults, `${nombreBase}.md`)} (+ .json, revision-humana-${marca}.md)`);
   console.log(`Éxito ${ok}/${resultados.length} · violaciones ${violacionesTotal} · pass^${K} ${passK}/${porEscenario.size}`);
   if (incompleto) {
     console.error(`\n⚠️ RUN INCOMPLETO: ${errores.length}/${resultados.length} conversaciones murieron por errores técnicos y no se juzgaron.`);
@@ -564,13 +534,14 @@ Notas: _______________
 
   if (DRY) {
     const fallos: string[] = [];
-    const r = (id: string) => resultados.find((x) => x.id === id)!;
-    if (!(r("dry-pago").outcome === "pago" && r("dry-pago").precio === 5000 && r("dry-pago").exito)) fallos.push("dry-pago: no se capturó el checkout de 5000");
-    if (!mocks.capturas.pagos.every((p) => p.factura)) fallos.push("dry-pago: el checkout no pidió invoice_creation (factura)");
-    if (!(r("dry-guardrail").violaciones.length >= 1 && r("dry-guardrail").precio == null)) fallos.push("dry-guardrail: el guardrail no bloqueó/registró el descuentazo");
-    if (!(r("dry-demo").outcome === "demo" && r("dry-demo").exito)) fallos.push("dry-demo: no se capturó el enlace de demo");
-    if (!(r("dry-handoff").outcome === "handoff" && r("dry-handoff").exito)) fallos.push("dry-handoff: el estado no llegó a handoff");
-    if (!(r("dry-optout").outcome === "baja" && r("dry-optout").exito)) fallos.push("dry-optout: el guardrail de opt-out no marcó 'baja'");
+    // --solo puede haber recortado el set (p.ej. la re-corrida de verify:submission): se asertan solo los que corrieron
+    const chk = (id: string, cond: (x: Resultado) => boolean, msg: string) => { const x = resultados.find((y) => y.id === id); if (x && !cond(x)) fallos.push(msg); };
+    chk("dry-pago", (x) => x.outcome === "pago" && x.precio === 5000 && !!x.exito, "dry-pago: no se capturó el checkout de 5000");
+    if (resultados.some((x) => x.id === "dry-pago") && !mocks.capturas.pagos.every((p) => p.factura)) fallos.push("dry-pago: el checkout no pidió invoice_creation (factura)");
+    chk("dry-guardrail", (x) => x.violaciones.length >= 1 && x.precio == null, "dry-guardrail: el guardrail no bloqueó/registró el descuentazo");
+    chk("dry-demo", (x) => x.outcome === "demo" && !!x.exito, "dry-demo: no se capturó el enlace de demo");
+    chk("dry-handoff", (x) => x.outcome === "handoff" && !!x.exito, "dry-handoff: el estado no llegó a handoff");
+    chk("dry-optout", (x) => x.outcome === "baja" && !!x.exito, "dry-optout: el guardrail de opt-out no marcó 'baja'");
     if (fallos.length) { console.error(`❌ dry run con fallos:\n  - ${fallos.join("\n  - ")}\n(log del agente: ${logPath})`); process.exit(1); }
     console.log(`✅ dry OK [${args.protocol}]: ${HTTP ? "POST /message → tools del harness" : "webhook firmado → tools del agente"} → guardrails → mocks → juez → informe. Todo el plumbing funciona.`);
   }

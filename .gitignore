@@ -9,6 +9,11 @@ results/*
 !results/.gitkeep
 !results/EXAMPLE-*.md
 
+# Hidden split — NEVER committed: the official score runs on it, and publishing it would turn
+# generalization into memorization. Only its commitment (scenarios-hidden.sha256) is public.
+# Maintainers keep a private backup OUTSIDE any public repo; a leak forces a refresh + version bump.
+scenarios-hidden/
+
 # Local agent DB / logs
 *.db
 *.log

@@ -37,7 +37,10 @@ Selling is the agentic task that touches money and makes promises, and it had no
 - **Language-agnostic HTTP adapter shipped** (`--protocol http`, `npm run bench:dry:http`). Four reference entrants pass the identical dry suite: Node, Python stdlib, official `openai` client, LangChain. A Python agent needs one endpoint and no database.
 - **Frameworks that own the agent loop can't be Closed-conformant.** OpenAI Agents SDK / LangGraph `ToolNode` execute the tools themselves; then the guardrails differ per entrant and the board compares whoever wrote the laxest `crear_pago`. Adapters bind tool *schemas* and return the `tool_call` upward. If a framework won't yield its loop → `--protocol webhook`, Open conformance, different column.
 - **Two defects the framework adapters exposed:** the dry brain returned a malformed OpenAI response (hand-written clients tolerated it, pydantic-backed SDKs rejected it), and the runner's boot budget was 10 s while importing LangChain takes ~12 s — silently excluding the frameworks Stage 2 exists to support. Now 60 s, `SUT_BOOT_TIMEOUT_MS` to override.
-- **Not yet:** the human labels themselves (→ κ report → `CloseBench-Verified`), public leaderboard, held-out/hidden set, Docker, reference adapters for OpenAI/LangChain. See [docs/ROADMAP.md](docs/ROADMAP.md).
+- **Stage 3 machinery shipped** (submission/verification/leaderboard/hidden split), all under `npm run test:stage3` (dry, free). Key design call: **a submission IS the report JSON** — no new bundle format; the manifest + inference-time transcripts were already everything a referee needs. `submit:validate` (structural honesty + digest), `verify:submission` (seeded ~20% re-run, outcome-level compare, ≥80% → sha-bound ✓), `leaderboard` (static, grouped by version+digest+split, Closed/Open never mixed). Dataset loading/digest extracted to `lib/dataset.ts` — one source of truth shared by bench and verifier. Two more harness bugs found by building the checker: dry assertions crashed on `--solo` subsets, and the report path printed `results/` even when `--out` redirected.
+- **Hidden split seeded** (10 scenarios, digest `eb13fe4d875c`, committed as `scenarios-hidden.sha256` commitment). `scenarios-hidden/` is git- **and docker-ignored** and lives **only on maintainer machines — keep a private off-repo backup**; a leak forces refresh + version bump. Like the Stage-1 red-team expansion: linted + dry-run only, never played against a live judge yet.
+- **An adversarial review round (empirical, exploit-first) closed 5 gaming vectors** before merge: fabricated hidden entries (→ official board requires ✓; maintainer checkouts match ids exactly), forged `.checked.json` (→ no crypto by choice; origin is a PR-review rule, docs state the limit honestly), `k: 0`/NaN disabling the runs-check (→ integer ≥ 1), self-declared division (→ derived from protocol), and markdown injection via filename/model-id into board cells (→ sanitized, selftest-covered). Lesson repeated: *every* submitter-controlled string that reaches a rendered surface gets sanitized, and every "can't be cheated" claim in docs must name its enforcement mechanism or its limit.
+- **Not yet:** the human labels themselves (→ κ report → `CloseBench-Verified`), first verified board entries (baseline policy + credit), hidden set validated against a live judge. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Provenance
 
@@ -52,7 +55,8 @@ Extracted from **[CloseForge](https://github.com/AndreuwMetal/closeforge)** (a W
 
 ## Open questions / next decisions
 
-- Leaderboard hosting + submission verification (self-report vs re-run). → [docs/GOVERNANCE.md](docs/GOVERNANCE.md)
-- Held-out set: how much stays public for iteration vs hidden for the official score.
+- **Baseline policy** (blocks the first board entries): which brains get a published number, at what `k`, and whether a baseline re-runs on every dataset bump or stays pinned to its version. → [docs/GOVERNANCE.md](docs/GOVERNANCE.md)
+- First live hidden-split run (validates the 10 hidden scenarios' ground truth against a real judge — until then they're linted, not tested).
 - Who labels the blind `revision-humana` samples, and how many, before publishing the first κ. (The freeze happened; the κ number is what still gates "the judge is a measure, not an opinion".)
+- Hidden-set growth: 10 scenarios is a floor; decide the target size and refresh cadence (the "Live" variant).
 - Second domain beyond real-estate SaaS (B2B SaaS, insurance) to prove generality.

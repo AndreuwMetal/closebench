@@ -38,3 +38,11 @@ export const firmarKapso = (body: string, secreto: string) =>
 
 export const eur = (n: number) => `${Math.round(n).toLocaleString("es-ES")} €`;
 export const pct = (n: number, d: number) => (d === 0 ? "—" : `${Math.round((100 * n) / d)}%`);
+
+// pass^k (τ-bench): un escenario "pasa" solo si TODAS sus k corridas tuvieron éxito. Es la métrica
+// de cabecera del leaderboard; se define UNA vez para que bench, verificación y board no diverjan.
+export function passPorEscenario<T extends { id: string; exito: boolean }>(resultados: T[]): Map<string, boolean> {
+  const porId = new Map<string, boolean>();
+  for (const r of resultados) porId.set(r.id, (porId.get(r.id) ?? true) && r.exito);
+  return porId;
+}

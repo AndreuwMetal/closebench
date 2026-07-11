@@ -99,6 +99,8 @@ Both protocols import the same policy module, so an identical agent scores ident
 
 Two conformance levels, never mixed (MLPerf's split): **Closed** (`http` — fixed buyer, policy and toolset) and **Open** (`webhook` — bring your own scaffolding). Every report stamps which one ran. See **[docs/ADAPTERS.md](docs/ADAPTERS.md)**.
 
+Got a score? The report JSON *is* the submission: `npm run submit:validate` it and PR it to [`submissions/`](submissions/) — maintainers re-run a seeded subset before it earns a ✓ on the [leaderboard](LEADERBOARD.md). Rules: [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md).
+
 ## Two tracks
 
 - **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 52 scenarios.
@@ -115,7 +117,7 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | **0 · Working harness** | ✅ done | End-to-end pipeline, 52 scenarios, compliance gate, `pass^k`, cost accounting, zero dependencies. |
 | **1 · Credible v1.0 dataset** | 🎯 nearly | Frozen + digested dataset · difficulty tiers · red-team 9→15 · κ tooling. **Open:** the human labels themselves, then `CloseBench-Verified`. |
 | **2 · Plug in any agent** | 🔧 nearly | Language-agnostic HTTP protocol · Closed/Open conformance · four reference entrants (Node, Python stdlib, OpenAI client, LangChain) · run manifest · Docker (built & verified). **Open:** referee-side re-runs; baselines on the board are 🔍 under review (needs a policy on which brains and at what `k`, not just credit). |
-| **3 · Leaderboard & anti-gaming** | ⬜ next | Hosted board, held-out split graded server-side, mandatory trajectories, spot-audits, versioning discipline. |
+| **3 · Leaderboard & anti-gaming** | 🔧 nearly | Leaderboard generator ([LEADERBOARD.md](LEADERBOARD.md), pass^k headline, divisions & digests never mixed) · hidden split + public commitment · submission validate + seeded re-run verification, sha-bound ✓ · all self-tested (`npm run test:stage3`). **Open:** first verified entries (needs the baseline policy + credit); hidden set not yet played against a live judge. |
 | **4 · Generality & neutrality** | ⬜ | More domains than real estate, more languages, latency/cost SLOs, multi-org governance. |
 | **5 · Reference status** | ⬜ | Third-party audits, adoption as a release gate, citations. |
 
@@ -131,7 +133,8 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | [docs/ADAPTERS.md](docs/ADAPTERS.md) | Both agent contracts — webhook and HTTP — and how to plug in your agent |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 52-scenario taxonomy, difficulty tiers, schema, and how to add more |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The stages from working harness to *the* referent |
-| [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | Leaderboard submission, verification, neutrality |
+| [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md) | Referee's manual: submitting, validation, seeded verification, the hidden split, the board |
+| [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | The rules: neutrality, divisions, anti-gaming, versioning |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute scenarios and adapters |
 
 Extracted from the [CloseForge](https://github.com/AndreuwMetal/closeforge) sales-agent project, where the scenarios, rubric and guardrails were battle-tested against a real agent. CloseForge is now just one entrant.
