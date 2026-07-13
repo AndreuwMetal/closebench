@@ -15,7 +15,7 @@ The design premise: **the submission format already existed.** Every run writes 
 
 Offline, exit-code driven, CI-friendly. A submission fails if:
 
-- **Manifest incomplete** — version, digest, split, k, protocol, conformance, `sut.cmd` + prompt, all three model ids (brain, buyer, judge), harness git + node. A score without its full configuration is a screenshot.
+- **Manifest incomplete** — version, digest, split, `dataset.domain`, k, protocol, conformance, `sut.cmd` + prompt, all three model ids (brain, buyer, judge), harness git + node. A score without its full configuration is a screenshot.
 - **Self-declared division** — `conformidad` is derived from the protocol (`http` = Closed, `webhook` = Open) and checked against it; you don't choose your division. `k` must be an integer ≥ 1 (a `k: 0` would switch off the runs-per-scenario check and allow cherry-picking runs inside a covered set).
 - **Any transcript missing or empty** — trajectories are mandatory; a report with stripped conversations is unverifiable and gets rejected, not trusted.
 - **Any technical error in a run** — a conversation that died before the judge saw it was never graded. "0 violations" on an incomplete run is not a pass (the report itself already says NO CITABLE; validate enforces it).
@@ -52,7 +52,8 @@ Public scenarios (`scenarios/`) are for iteration and debugging. The **official 
 
 `npm run leaderboard` regenerates [`LEADERBOARD.md`](../LEADERBOARD.md) from `submissions/`. Static and deterministic: the board is a *view* over verified artifacts, not a database anyone edits.
 
-- **Grouped by (dataset version, digest, split)** — scores across versions are never mixed in one table; that's the versioning discipline made mechanical.
+- **Grouped by (domain, dataset version, digest, split)** — scores are only comparable within one (domain, version, digest, split); tables never mix domains, and versions/digests within a domain are never mixed in one table either. See [DOMAINS.md](DOMAINS.md) for what a domain is and why there's no cross-domain composite score yet.
+- **Latency p50** appears as a board column when the report carries it — per-turn agent response time (p50/p95), reported by the run and rendered when present.
 - **Divisions separated** (MLPerf): Closed (`http` protocol — fixed buyer, policy, toolset; the comparable number) and Open (`webhook` — bring your own scaffolding) are different tables, never sorted together.
 - **Headline metric: `pass^k`** (reliability), never best-of-k. Sort: `pass^k` desc, then success rate, then $/conv asc. Columns include violations and cost — a board that hides cost crowns closers nobody can afford to run.
 - **✓ Checked** appears only with a valid, sha-bound verification stamp whose verdict is REPRODUCED.

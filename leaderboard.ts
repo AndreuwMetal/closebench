@@ -20,9 +20,9 @@ const { values: flags } = parseArgs({
 });
 
 type Entrada = {
-  nombre: string; dry: boolean; split: string; version: string; digest: string; conformidad: string;
+  nombre: string; dry: boolean; split: string; dominio: string; version: string; digest: string; conformidad: string;
   cerebro: string; k: number; passK: number; nIds: number; ok: number; total: number;
-  violaciones: number; costeConv: number; checked: string;
+  violaciones: number; costeConv: number; latP50: number | null; checked: string;
 };
 
 // El nombre de fichero y el id de modelo los controla el submitter y acaban en celdas de la tabla:
@@ -61,20 +61,23 @@ for (const f of ficheros) {
     } catch { checked = "⚠ stamp ilegible"; }
   }
 
+  // latencia p50 sobre todos los turnos del run; informes anteriores a Stage 4 no la traen → "—"
+  const lats = rs.flatMap((r: any) => (Array.isArray(r.latenciasMs) ? r.latenciasMs : [])).filter((x: any) => Number.isFinite(x)).sort((a: number, b: number) => a - b);
   entradas.push({
     nombre: celda(v.dry ? `${nombre} · DRY (plumbing)` : nombre),
-    dry: v.dry, split: v.split, version: celda(m.dataset.version, 16), digest: m.dataset.digest,
+    dry: v.dry, split: v.split, dominio: celda(v.dominio, 24), version: celda(m.dataset.version, 16), digest: m.dataset.digest,
     conformidad: m.conformidad, cerebro: celda(m.modelos.cerebro), k: Number(m.dataset.k),
     passK: [...pass.values()].filter(Boolean).length, nIds: pass.size,
     ok: rs.filter((r: any) => r.exito).length, total: rs.length,
     violaciones: rs.reduce((n: number, r: any) => n + (r.violaciones?.length ?? 0), 0),
-    costeConv: v.costePorConv, checked,
+    costeConv: v.costePorConv, latP50: lats.length ? lats[Math.floor(lats.length / 2)] : null, checked,
   });
 }
 
-// grupos (version, digest, split): scores de datasets distintos JAMÁS en la misma tabla.
+// grupos (dominio, version, digest, split): scores de datasets distintos JAMÁS en la misma tabla —
+// y un dominio no compite contra otro (no hay score compuesto: docs/DOMAINS.md).
 // hidden primero: es el board oficial; public es iteración.
-const clave = (e: Entrada) => `${e.split}|v${e.version}|${e.digest}`;
+const clave = (e: Entrada) => `${e.split}|${e.dominio}|v${e.version}|${e.digest}`;
 const grupos = new Map<string, Entrada[]>();
 for (const e of entradas) grupos.set(clave(e), [...(grupos.get(clave(e)) ?? []), e]);
 const ordenGrupos = [...grupos.keys()].sort((a, b) => (a.split("|")[0] === "hidden" ? 0 : 1) - (b.split("|")[0] === "hidden" ? 0 : 1) || a.localeCompare(b));
@@ -82,18 +85,18 @@ const ordenGrupos = [...grupos.keys()].sort((a, b) => (a.split("|")[0] === "hidd
 const tabla = (es: Entrada[]) => {
   const filas = [...es].sort((a, b) => b.passK / b.nIds - a.passK / a.nIds || b.ok / b.total - a.ok / a.total || a.costeConv - b.costeConv);
   return [
-    "| # | Entrant | Brain | k | pass^k | Success | Violations | $/conv | Checked |",
-    "|---|---|---|---|---|---|---|---|---|",
+    "| # | Entrant | Brain | k | pass^k | Success | Violations | $/conv | p50 lat | Checked |",
+    "|---|---|---|---|---|---|---|---|---|---|",
     ...filas.map((e, i) =>
-      `| ${i + 1} | **${e.nombre}** | \`${e.cerebro}\` | ${e.k} | ${e.passK}/${e.nIds} (${pct(e.passK, e.nIds)}) | ${e.ok}/${e.total} (${pct(e.ok, e.total)}) | ${e.violaciones === 0 ? "0 ✅" : `${e.violaciones} ❌`} | $${e.costeConv.toFixed(3)} | ${e.checked} |`),
+      `| ${i + 1} | **${e.nombre}** | \`${e.cerebro}\` | ${e.k} | ${e.passK}/${e.nIds} (${pct(e.passK, e.nIds)}) | ${e.ok}/${e.total} (${pct(e.ok, e.total)}) | ${e.violaciones === 0 ? "0 ✅" : `${e.violaciones} ❌`} | $${e.costeConv.toFixed(3)} | ${e.latP50 == null ? "—" : `${(e.latP50 / 1000).toFixed(1)}s`} | ${e.checked} |`),
   ].join("\n");
 };
 
 const seccionGrupo = (k: string, es: Entrada[]) => {
-  const [split, version, digest] = k.split("|");
+  const [split, dominio, version, digest] = k.split("|");
   const titulo = split === "hidden"
-    ? `## Official board — dataset ${version} · digest \`${digest}\` · hidden split`
-    : `## Iteration results — dataset ${version} · digest \`${digest}\` · public split (not official: for development and debugging)`;
+    ? `## Official board — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · hidden split`
+    : `## Iteration results — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · public split (not official: for development and debugging)`;
   // El board OFICIAL solo lista entradas con ✓ del árbitro: en un checkout sin scenarios-hidden/ la
   // validación de un run "hidden" solo pudo cotejar digest y tamaño contra el compromiso, así que sin
   // re-corrida del mantenedor una entrada oculta no rankea — se lista como pendiente, no se descarta.
@@ -121,7 +124,7 @@ const md = `# CloseBench Leaderboard
 
 > Regenerated with \`npm run leaderboard\` from [\`submissions/\`](submissions/) — how to submit: [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md).
 > Headline metric is **pass^k** (reliability across k runs), never best-of-k. Violations are automatic scenario fails — the compliance gate is inside the number, not next to it.
-> **✓ Checked** = a maintainer re-ran a seeded subset and the outcomes reproduced; the seed is published, the stamp is sha-bound to the report. Scores are only comparable within one dataset version + digest + split: tables never mix them.
+> **✓ Checked** = a maintainer re-ran a seeded subset and the outcomes reproduced; the seed is published, the stamp is sha-bound to the report. Scores are only comparable within one domain + dataset version + digest + split: tables never mix them, and there is no cross-domain composite score ([docs/DOMAINS.md](docs/DOMAINS.md)). **p50 lat** = median agent response time per turn, when the report carries it.
 
 _Last regenerated: ${stamp()}._
 

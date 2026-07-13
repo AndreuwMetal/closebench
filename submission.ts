@@ -15,20 +15,20 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
-import { cargarDataset, compromisoHidden, DATASET_VERSION, COMPROMISO_HIDDEN, RAIZ, type Split } from "./lib/dataset.ts";
+import { cargarDataset, compromisoHidden, DATASET_VERSION, COMPROMISO_HIDDEN, DOMINIOS, DOMINIO_DEFECTO, RAIZ, type Split } from "./lib/dataset.ts";
 import { costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
 import { stamp, passPorEscenario } from "./lib/util.ts";
 
 export type Validacion = {
   informe: { manifiesto: any; resultados: any[] };
   errores: string[]; avisos: string[];
-  dry: boolean; split: Split; costePorConv: number;
+  dry: boolean; split: Split; dominio: string; costePorConv: number;
 };
 
 // ── validate: lo que un informe tiene que demostrar antes de llamarse submission ──
 export function validar(path: string): Validacion {
   const errores: string[] = [], avisos: string[] = [];
-  const nada: Validacion = { informe: { manifiesto: {}, resultados: [] }, errores, avisos, dry: false, split: "public", costePorConv: 0 };
+  const nada: Validacion = { informe: { manifiesto: {}, resultados: [] }, errores, avisos, dry: false, split: "public", dominio: DOMINIO_DEFECTO, costePorConv: 0 };
   let informe: any;
   try { informe = JSON.parse(readFileSync(path, "utf8")); }
   catch (e) { errores.push(`no se pudo leer/parsear ${path}: ${(e as Error).message}`); return nada; }
@@ -48,6 +48,11 @@ export function validar(path: string): Validacion {
   const split: Split = m.dataset?.split ?? "public";
   if (!m.dataset?.split) avisos.push("manifiesto antiguo sin dataset.split: asumo public");
   if (!["public", "hidden"].includes(split)) errores.push(`dataset.split inválido: "${split}" (public | hidden)`);
+  // el dominio tampoco lo elige el submitter a posteriori: el digest se coteja contra el dataset de
+  // ESE dominio, así que re-etiquetar un run de realestate como "saas" muere aquí, no en el board.
+  const dominio: string = m.dataset?.domain ?? DOMINIO_DEFECTO;
+  if (!m.dataset?.domain) avisos.push(`manifiesto antiguo sin dataset.domain: asumo ${DOMINIO_DEFECTO}`);
+  if (!DOMINIOS[dominio]) errores.push(`dataset.domain desconocido: "${dominio}" (${Object.keys(DOMINIOS).join(" | ")})`);
   // la división NO la elige el submitter: se deriva del protocolo (http = Closed, webhook = Open).
   // Sin este cotejo, un run webhook se autodeclararía "Closed" y posaría en la tabla comparable.
   const confEsperada = m.protocolo === "http" ? "Closed" : m.protocolo === "webhook" ? "Open" : null;
@@ -84,15 +89,20 @@ export function validar(path: string): Validacion {
   //    entero: sin esto, un informe de `--solo calientes` (5 escenarios fáciles) luciría un pass^k
   //    perfecto en el board. --solo es para depurar, no para presumir. Para el split oculto sin
   //    tenerlo en local, vale el compromiso publicado (scenarios-hidden.sha256): digest + tamaño.
-  let esperado: { digest: string; ids: string[] | null; n: number } | null = null;
-  try { const d = cargarDataset(split); esperado = { digest: d.digest, ids: d.escenarios.map((e) => e.id), n: d.escenarios.length }; }
-  catch { const c = split === "hidden" ? compromisoHidden() : null; if (c) esperado = { digest: c.digest, ids: null, n: c.escenarios }; }
+  let esperado: { digest: string; version: string | null; ids: string[] | null; n: number } | null = null;
+  if (DOMINIOS[dominio]) {
+    try { const d = cargarDataset(split, dominio); esperado = { digest: d.digest, version: d.version, ids: d.escenarios.map((e) => e.id), n: d.escenarios.length }; }
+    // el compromiso publicado solo existe para el split oculto del dominio por defecto (realestate)
+    catch { const c = split === "hidden" && dominio === DOMINIO_DEFECTO ? compromisoHidden() : null; if (c) esperado = { digest: c.digest, version: null, ids: null, n: c.escenarios }; }
+  }
   if (!esperado) errores.push(split === "hidden"
-    ? "no puedo comprobar el split oculto: ni scenarios-hidden/ ni scenarios-hidden.sha256 en este checkout"
-    : "no puedo recalcular el digest del split public en este checkout");
+    ? `no puedo comprobar el split oculto del dominio ${dominio}: ni su scenarios-hidden/ ni un compromiso publicado en este checkout`
+    : `no puedo recalcular el digest del split public del dominio ${dominio} en este checkout`);
   else {
     if (m.dataset?.digest && m.dataset.digest !== esperado.digest)
-      errores.push(`digest del dataset no coincide: informe ${m.dataset.digest} ≠ checkout ${esperado.digest} — score no comparable con este dataset`);
+      errores.push(`digest del dataset no coincide: informe ${m.dataset.digest} ≠ checkout ${esperado.digest} (dominio ${dominio}) — score no comparable con este dataset`);
+    if (esperado.version && m.dataset?.version && String(m.dataset.version) !== esperado.version)
+      errores.push(`versión del dataset no coincide: informe ${m.dataset.version} ≠ ${esperado.version} (dominio ${dominio})`);
     if (!dry) {
       const idsInforme = new Set(rs.map((r: any) => r.id as string));
       if (esperado.ids) {
@@ -118,7 +128,7 @@ export function validar(path: string): Validacion {
   if (!dry && !uso.entrada && !uso.salida) avisos.push("sin uso de tokens registrado: divulgación de coste vacía");
   else if (!dry && coste === 0) avisos.push(`modelo sin tarifa en PRECIOS (${m.modelos?.cerebro}): el coste reportado será $0 — divulgación incompleta`);
 
-  return { informe, errores, avisos, dry, split, costePorConv };
+  return { informe, errores, avisos, dry, split, dominio, costePorConv };
 }
 
 // ── verify: la re-corrida del árbitro ──
@@ -161,7 +171,7 @@ export async function verificar(path: string, opts: { seed?: number; frac?: numb
   // re-corre SOLO el subconjunto, con la config pinneada del manifiesto (split, protocolo, prompt, k, SUT)
   const scratch = mkdtempSync(join(tmpdir(), "closebench-verify-"));
   const argsBench = ["closebench.ts", "--solo", sel.join(","), "--k", String(m.dataset.k), "--protocol", m.protocolo,
-    "--split", v.split, "--prompt", m.sut.prompt, "--concurrencia", "2", "--out", scratch];
+    "--split", v.split, "--domain", v.dominio, "--prompt", m.sut.prompt, "--concurrencia", "2", "--out", scratch];
   if (v.dry) argsBench.push("--dry");
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (!v.dry) {
@@ -260,6 +270,9 @@ async function selftest() {
   assert(dopar("dry-como-real", (j) => { j.manifiesto.dry = false; j.manifiesto.modelos.comprador = "claude-sonnet-5"; j.manifiesto.modelos.juez = "claude-opus-4-8"; }).errores.length, "rechaza un dry re-etiquetado como real (cobertura parcial + ids ajenos)");
   assert(dopar("k-cero", (j) => { j.manifiesto.dataset.k = 0; }).errores.length, "rechaza k=0 (apagaría el chequeo de corridas por escenario)");
   assert(dopar("division-falsa", (j) => { j.manifiesto.conformidad = "Closed"; }).errores.length, "rechaza una división que no corresponde al protocolo");
+  // Stage 4: el dominio tampoco es re-etiquetable — el digest se coteja contra el dataset de ESE dominio
+  assert(dopar("dominio-cruzado", (j) => { j.manifiesto.dataset.domain = "saas"; }).errores.length, "rechaza un informe re-etiquetado a otro dominio (digest de otro dataset)");
+  assert(dopar("dominio-desconocido", (j) => { j.manifiesto.dataset.domain = "inventado"; }).errores.length, "rechaza un dominio que no existe");
 
   console.log("\n[4/7] verify reproduce un dry determinista al 100%");
   const ver = await verificar(sub, { seed: 42 });

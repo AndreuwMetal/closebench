@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "nivel_contexto": "completo",
+  "empresa": {
+    "nombre": "Kanaly",
+    "web": "kanaly.app",
+    "idiomas": ["es", "en"]
+  },
+  "servicio": {
+    "nombre": "Bandeja de WhatsApp + CRM para equipos de e-commerce",
+    "descripcion_corta": "Bandeja de WhatsApp compartida por todo el equipo con CRM ligero de contactos y pedidos, lista en 3 días laborables, para vender y dar soporte sin perder mensajes.",
+    "entregables": [
+      "bandeja de WhatsApp compartida (hasta 15 usuarios)",
+      "CRM ligero: contactos, pedidos y etiquetas",
+      "plantillas de respuesta y automatizaciones básicas",
+      "integración con Shopify y WooCommerce",
+      "onboarding y soporte incluidos el primer año"
+    ],
+    "plazo_entrega": "3 días laborables",
+    "para_quien": "equipos pequeños de e-commerce (2-15 personas) que venden y dan soporte por WhatsApp",
+    "no_es_para": "grandes retailers con más de 15 agentes, call centers, o negocios que necesiten telefonía/IVR"
+  },
+  "precios": {
+    "moneda": "EUR",
+    "precio_lista": 3000,
+    "modelo": "pago único anual",
+    "descuento_maximo_pct": 10,
+    "condiciones_descuento": "solo si el lead se compromete a empezar el plan anual esta misma semana o trae una referencia de otro equipo"
+  },
+  "cierre": {
+    "demo": "demo de 25 minutos por videollamada",
+    "pago": "enlace de pago seguro (Stripe)"
+  },
+  "prueba_social": {
+    "casos": [
+      "Mueble Rústico (tienda online de muebles, Valencia): unificó 4 números de WhatsApp en una sola bandeja y bajó el tiempo de respuesta un 35% en 2 meses",
+      "Loja Bela (e-commerce de moda, São Paulo): pasó de perder pedidos por WhatsApp personal a un CRM compartido para todo el equipo en 1 semana"
+    ]
+  },
+  "objeciones_tipicas": [
+    "ya usamos WhatsApp Business gratis",
+    "me parece caro para una tienda pequeña",
+    "no tenemos tiempo de migrar las conversaciones"
+  ],
+  "requiere_humano": [
+    "descuento por encima del tope",
+    "asesoría fiscal o legal",
+    "el lead pide hablar con una persona",
+    "enfado o queja",
+    "condiciones de contrato no estándar",
+    "cuestionario de seguridad o revisión de DPA"
+  ],
+  "campos_obligatorios_para_vender": [
+    "empresa.nombre",
+    "servicio.nombre",
+    "servicio.descripcion_corta",
+    "precios.precio_lista",
+    "precios.modelo",
+    "precios.descuento_maximo_pct"
+  ]
+}

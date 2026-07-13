@@ -45,6 +45,54 @@ Borrowed from MLPerf's open/closed split, live since Stage 2 and rendered as sep
 
 Authors and maintainers who also submit agents disclose it. Maintainer-affiliated entries get the same hidden-split re-run as everyone else, publicly noted. The goal is simple: **no one should be able to tell, from the rules, which agent the referees built.**
 
+## Stage 4 — rounds, availability, peer review, multi-org
+
+Stage 3 answers "can this number be reproduced?" Stage 4 answers the next question a skeptic asks: "were the rules fixed *before* the numbers came in, and who's checking the referee?" The mechanisms below are graded honestly — some are live today, some are the committed design waiting on submission volume.
+
+### Versioned submission rounds
+
+The intent: a fixed calendar (e.g. quarterly) where a round's rules — dataset version + digest, `k`, judge/buyer models, that round's latency SLO — are **frozen the moment the round opens**. Every entry submitted inside the round is scored under those identical frozen rules; an entry that lands after the round closes waits for the next one rather than being graded against rules chosen after the fact.
+
+**Status: committed design, not live process.** Today, submission is continuous (open a PR whenever `submit:validate` passes) because round volume doesn't exist yet — there's no queue to protect from rule-shopping. Rounds activate once submission frequency justifies the overhead of freezing and re-opening a rule set; until then this section states the target, not the current mechanism, honestly.
+
+### Availability tags
+
+Borrowed from MLPerf: every submission declares one of
+
+- **Available** — anyone can buy or download the exact system under test today (a public API model + a public prompt/config, or an open-weights model).
+- **Preview** — will be Available within a stated window (MLPerf uses months); a submission under Preview gets **one round of grace** before it must convert to Available or drop off the headline table.
+- **RDI** (research/dev/internal) — not purchasable or downloadable by a third party. Reported for context, **never headline-ranked** — a number nobody else can reproduce by buying the same thing isn't a comparable claim.
+
+**Enforcement: process, not code.** The tag is a field the submitter declares in the PR description; there is no code that can verify a vendor's public availability. It is **checked at PR review** — a reviewer challenging a mislabeled tag is the mechanism, the same way the 3-entries-per-org cap in [Anti-gaming](#anti-gaming) is a review-time check, not a runtime one. Naming this limit beats implying an availability-verification system that doesn't exist.
+
+### Peer review & spot audit
+
+Two independent checks inside a round, so no single submitter's claim goes unexamined by anyone but the maintainer:
+
+- **Mutual peer review.** Every submitter in a round is **assigned** (not self-selected) one other submission to review — reading the manifest, transcripts, and the reasonableness of the claimed config. Assignment, not choice, is the point: letting submitters pick who reviews whom is how friendly pairs launder each other's numbers.
+- **Spot audit.** A COI-free auditor replays a seeded subset of a submission against the pinned config — the same mechanism as `verify:submission`'s seeded ~20% re-run (see [SUBMISSIONS.md](SUBMISSIONS.md)), extended to a round-level, independently-assigned auditor rather than "the maintainer."
+
+**Conflict-of-interest rules:**
+
+- You never review or audit your own organization's entry.
+- A review or audit assignment that pairs direct competitors can be **challenged once** — the challenge is heard before the round's results are published, not after.
+- All disclosures (who reviewed whom, who audited whom, any COI raised) are **listed in the round's summary**, so the assignment graph is public even though the assignment itself wasn't chosen by the parties.
+
+**Status: committed design, not live process** — same caveat as rounds. There's no peer pool to assign until there are enough submitters in a round to assign pairs meaningfully. Until then, every entry gets the Stage 3 maintainer-run `verify:submission`, which is real and live today but is a single referee, not a peer network.
+
+### Multi-org steering
+
+The end state named since Stage 0 ([Principles](#principles)): a small steering group across organizations, with conflict-of-interest disclosure, deciding scenario/rubric/judge changes and round rules — the MLCommons model. CloseBench does not have this yet; it has one author.
+
+Until the group exists, sole-maintainer authority is mitigated the way a single point of trust is mitigated anywhere reproducibility is possible: not by pretending it isn't sole authority, but by making the authority's decisions checkable.
+
+- **Everything regenerable.** The leaderboard is `npm run leaderboard` run over `submissions/` — a view, not a database anyone (including the maintainer) hand-edits. Dataset digests are recomputed from the checked-out files, not asserted.
+- **Public seeds.** `verify:submission`'s subset-selection seed is published with the verdict — a maintainer can't quietly pick a lenient subset.
+- **Sha-bound stamps.** A `.checked.json` is bound to the exact report bytes it verified ([SUBMISSIONS.md](SUBMISSIONS.md)); a maintainer editing a report after verification voids its own stamp mechanically, not by trusting the maintainer to re-verify.
+- **This document, written before disputes exist.** Freezing the anti-gaming rules and the honesty convention ("every mechanism names its enforcement or states its limit") now, while there is nothing at stake, is cheaper credibility than writing rules to fit a dispute after one happens.
+
+None of this is a substitute for the steering group — it's what makes the wait for one auditable instead of just asserted.
+
 ## Contact
 
 Governance discussion happens in the open on the [issue tracker](https://github.com/AndreuwMetal/closebench/issues). Until the multi-org group is stood up, the repo maintainers are the interim stewards, bound by the principles above.
