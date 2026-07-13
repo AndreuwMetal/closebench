@@ -1,5 +1,7 @@
 # CloseBench
 
+[![ci](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml)
+
 **The reference benchmark for AI sales agents.**
 
 Coding agents have SWE-bench. Tool-use and customer-service agents have τ-bench. **Selling** — the part of agentic AI that touches money, makes promises, and has to stay honest under pressure — has had no serious, reproducible benchmark. CloseBench is that benchmark.
@@ -119,7 +121,7 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | **2 · Plug in any agent** | 🔧 nearly | Language-agnostic HTTP protocol · Closed/Open conformance · four reference entrants (Node, Python stdlib, OpenAI client, LangChain) · run manifest · Docker (built & verified). **Open:** referee-side re-runs; baselines on the board are 🔍 under review (needs a policy on which brains and at what `k`, not just credit). |
 | **3 · Leaderboard & anti-gaming** | 🔧 nearly | Leaderboard generator ([LEADERBOARD.md](LEADERBOARD.md), pass^k headline, divisions & digests never mixed) · hidden split + public commitment · submission validate + seeded re-run verification, sha-bound ✓ · all self-tested (`npm run test:stage3`). **Open:** first verified entries (needs the baseline policy + credit); hidden set not yet played against a live judge. |
 | **4 · Generality & neutrality** | 🔧 started | Domain seam (`--domain`) + second domain **saas** (20 scenarios, Preview: linted + dry only) · per-turn latency reported (p50/p95 + board column) · governance layer written down (submission rounds, availability tags, peer review + COI — committed design, activates with volume; [docs/GOVERNANCE.md](docs/GOVERNANCE.md), [docs/DOMAINS.md](docs/DOMAINS.md)). **Open:** saas validation against a live judge; more languages (needs native speakers); multi-org steering. |
-| **5 · Reference status** | ⬜ | Third-party audits, adoption as a release gate, citations. |
+| **5 · Reference status** | 🔧 started | Public CI (dry suites + anti-gaming selftest on every PR) · release gate `--min-pass` + adoption guide ([docs/ADOPTION.md](docs/ADOPTION.md)) · auditor's ladder ([REPRODUCE.md](REPRODUCE.md)) · [CITATION.cff](CITATION.cff) · Live variant design ([docs/LIVE.md](docs/LIVE.md)). **Open:** the external part — actual third-party reproductions, adoption, citations. |
 
 **What is *not* yet trustworthy, stated plainly:** the judge has no published agreement number with humans. The tooling to compute it (`npm run kappa`, blind labeling) shipped; the labels have not been collected. Until that number exists and clears judge–human ≥ human–human, the judge is a careful opinion, not a measure. Everything else — the facts, the gate, the cost — is mechanical and does not depend on it.
 
@@ -133,6 +135,9 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | [docs/ADAPTERS.md](docs/ADAPTERS.md) | Both agent contracts — webhook and HTTP — and how to plug in your agent |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 52-scenario taxonomy, difficulty tiers, schema, and how to add more |
 | [docs/DOMAINS.md](docs/DOMAINS.md) | Sales domains beyond real estate — layout, lifecycle (Preview → Validated → Official), how to propose one |
+| [docs/ADOPTION.md](docs/ADOPTION.md) | CloseBench as a release gate — `--min-pass`, copy-paste CI for agent builders, what a passing gate lets you claim |
+| [docs/LIVE.md](docs/LIVE.md) | The Live variant (quarterly public refresh against contamination) — committed design |
+| [REPRODUCE.md](REPRODUCE.md) | The auditor's ladder: verify CloseBench's claims yourself, cheapest rung first |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The stages from working harness to *the* referent |
 | [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md) | Referee's manual: submitting, validation, seeded verification, the hidden split, the board |
 | [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | The rules: neutrality, divisions, anti-gaming, versioning |

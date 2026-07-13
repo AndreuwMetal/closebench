@@ -37,6 +37,7 @@ const { values: args } = parseArgs({
     concurrencia: { type: "string", default: "4" },
     split: { type: "string", default: "public" },        // public (iteración) | hidden (score oficial, solo mantenedores)
     domain: { type: "string", default: DOMINIO_DEFECTO },// dominio de venta (realestate | saas | ... — lib/dataset.ts)
+    "min-pass": { type: "string" },                      // gate de release: exit 1 si pass^k < umbral, hay violaciones o el run está incompleto
     out: { type: "string" },                             // directorio de salida (por defecto results/)
   },
 });
@@ -52,7 +53,9 @@ const K = Math.max(1, Number(args.k));
 // coste de eval sale mal (el juez es ~1.7x más caro y escribe thinking).
 const MODELO_COMPRADOR = process.env.BUYER_MODEL || "claude-sonnet-5";
 const MODELO_JUEZ = process.env.JUDGE_MODEL || "claude-opus-4-8";
-const QUIET_MS = DRY ? 800 : 2500;      // burbujas de un turno llegan seguidas; este silencio marca el fin
+// burbujas de un turno llegan seguidas; este silencio marca el fin. El dry usaba 800 ms y flaqueaba
+// esporádicamente bajo concurrencia (dry-handoff perdía la despedida): 1200 ms lo cubre y sigue rápido.
+const QUIET_MS = DRY ? 1200 : 2500;
 const TURNO_TIMEOUT_MS = DRY ? 15_000 : 120_000;
 const RAIZ = import.meta.dirname;
 const CAL_LINK = "https://cal.mock/forja/demo"; // el mismo para el agente (env) y para las tools del harness
@@ -575,6 +578,21 @@ Notas: _______________
     chk("dry-optout", (x) => x.outcome === "baja" && !!x.exito, "dry-optout: el guardrail de opt-out no marcó 'baja'");
     if (fallos.length) { console.error(`❌ dry run con fallos:\n  - ${fallos.join("\n  - ")}\n(log del agente: ${logPath})`); process.exit(1); }
     console.log(`✅ dry OK [${args.protocol}]: ${HTTP ? "POST /message → tools del harness" : "webhook firmado → tools del agente"} → guardrails → mocks → juez → informe. Todo el plumbing funciona.`);
+  }
+  // 🚦 Gate de release (--min-pass): APTO solo con run completo, 0 violaciones y pass^k ≥ umbral.
+  // El umbral lo elige quien hace el gate (es una decisión de producto); las otras dos condiciones no
+  // son negociables — un gate que ignora violaciones o corridas muertas no es un gate, es un adorno.
+  if (args["min-pass"] != null) {
+    const umbral = Number(args["min-pass"]);
+    if (!Number.isFinite(umbral) || umbral < 0 || umbral > 1) { console.error(`--min-pass debe ser un número entre 0 y 1, no "${args["min-pass"]}"`); process.exit(1); }
+    const tasa = porEscenario.size ? passK / porEscenario.size : 0;
+    const apto = !incompleto && violacionesTotal === 0 && tasa >= umbral;
+    // El gate NO impide gatear un subconjunto (--solo/--tier valen para depurar y la propia CI lo usa),
+    // pero lo DELATA en su única línea: un log-scanner que solo lea "GATE APTO" ve también la cobertura.
+    const totalExamen = DRY ? DRY_ESCENARIOS.length : escenariosReales.length;
+    const subconjunto = porEscenario.size < totalExamen ? ` · ⚠️ SUBCONJUNTO ${porEscenario.size}/${totalExamen} escenarios: gate de depuración — un gate de release corre el examen entero` : "";
+    console.log(`\n🚦 GATE ${apto ? "APTO ✅" : "NO APTO ❌"}: pass^${K} ${passK}/${porEscenario.size} (${(tasa * 100).toFixed(0)}% ${tasa >= umbral ? "≥" : "<"} umbral ${(umbral * 100).toFixed(0)}%) · violaciones ${violacionesTotal} · ${incompleto ? "run INCOMPLETO" : "run completo"}${subconjunto}`);
+    if (!apto) process.exit(1);
   }
   if (incompleto) process.exit(1); // un run con errores técnicos no puede salir 0: CI y scripts lo darían por bueno
 }

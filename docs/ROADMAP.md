@@ -62,13 +62,17 @@ CloseBench is a working benchmark today. Becoming the *reference* sales benchmar
 - 🔜 **More languages**, with native-speaker review of personas and rubric — blocked on native speakers, not code.
 - 🔜 **Neutral governance, activated** — move decisions to a small multi-org group with conflict-of-interest rules (the MLPerf/MLCommons model). A benchmark controlled by one vendor never becomes *the* referent. Blocked on partner orgs and submission volume; the rules they'd adopt are already frozen above.
 
-### Stage 5 — Reference status 📌
+### Stage 5 — Reference status 📌 (in progress)
 
 *Goal: the answer to "is this sales agent any good?" is a CloseBench score.*
 
-- Third-party audits and independent reproductions.
-- Adoption by agent builders as a release gate; citations in papers and product claims.
-- Regular dataset refreshes (a "Live" variant) to stay ahead of contamination as models retrain on the web.
+- ✅ **Public CI** — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): the 4 dry suites + negotiation dry + the anti-gaming selftest + a release-gate self-check, on every push and PR, zero keys, zero cost. "Never let the dry go red" was a convention in MEMORY.md; now it's a public, mechanical fact — the first rung of [REPRODUCE.md](../REPRODUCE.md)'s auditor ladder is just "look at the Actions tab".
+- ✅ **Release gate** — `--min-pass <rate>`: exit 1 unless the run is complete, has **zero violations**, and pass^k ≥ rate. The threshold is the builder's product decision (the benchmark doesn't bless one); the other two conditions are not negotiable — a gate that ignores violations or dead runs is an ornament. Adoption guide with copy-paste CI for agent builders: [ADOPTION.md](ADOPTION.md).
+- ✅ **Independent reproduction path** — [REPRODUCE.md](../REPRODUCE.md): the auditor's ladder, cheapest rung first (free harness-honesty check → free paperwork audit of any published claim → paid seeded re-run → what *cannot* be reproduced, stated plainly).
+- ✅ **Citability** — [CITATION.cff](../CITATION.cff) (GitHub's "Cite this repository"); a *score* citation must carry domain + version + digest + split, same rule as everywhere else.
+- ✅ **Live variant, committed design** — [LIVE.md](LIVE.md): fixed-calendar public refresh per domain (quarterly as working default; `live-YYYY.Q` versions, disjoint from frozen citable versions), retire-into-archive, live-judge validation before seal. Activates with API credit + the first verified entries, and the doc says so instead of promising a cadence it can't keep.
+- 🔜 **Third-party audits and independent reproductions** — the tooling above is the invitation; the act is external by definition. First target: one person who isn't the author runs rungs 1–2 of REPRODUCE.md and files an issue with what didn't hold.
+- 🔜 **Adoption as a release gate; citations in papers and product claims** — external adoption; everything code could contribute (gate flag, CI template, CFF) is shipped.
 
 ---
 
