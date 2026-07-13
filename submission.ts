@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
-import { cargarDataset, compromisoHidden, DATASET_VERSION, COMPROMISO_HIDDEN, DOMINIOS, DOMINIO_DEFECTO, RAIZ, type Split } from "./lib/dataset.ts";
+import { cargarDataset, compromisoHidden, compromisoDe, DOMINIOS, DOMINIO_DEFECTO, RAIZ, type Split } from "./lib/dataset.ts";
 import { costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
 import { stamp, passPorEscenario } from "./lib/util.ts";
 
@@ -92,8 +92,8 @@ export function validar(path: string): Validacion {
   let esperado: { digest: string; version: string | null; ids: string[] | null; n: number } | null = null;
   if (DOMINIOS[dominio]) {
     try { const d = cargarDataset(split, dominio); esperado = { digest: d.digest, version: d.version, ids: d.escenarios.map((e) => e.id), n: d.escenarios.length }; }
-    // el compromiso publicado solo existe para el split oculto del dominio por defecto (realestate)
-    catch { const c = split === "hidden" && dominio === DOMINIO_DEFECTO ? compromisoHidden() : null; if (c) esperado = { digest: c.digest, version: null, ids: null, n: c.escenarios }; }
+    // sin el split oculto en local vale su compromiso publicado (por dominio: compromisoDe)
+    catch { const c = split === "hidden" ? compromisoHidden(dominio) : null; if (c) esperado = { digest: c.digest, version: null, ids: null, n: c.escenarios }; }
   }
   if (!esperado) errores.push(split === "hidden"
     ? `no puedo comprobar el split oculto del dominio ${dominio}: ni su scenarios-hidden/ ni un compromiso publicado en este checkout`
@@ -121,7 +121,16 @@ export function validar(path: string): Validacion {
   if (!dry && m.modelos?.juez && m.modelos?.cerebro && String(m.modelos.juez) === String(m.modelos.cerebro))
     avisos.push(`juez y cerebro son el mismo modelo (${m.modelos.juez}): sesgo de autopreferencia`);
 
-  // 6) divulgación de coste: $/conversación desde tokens reales
+  // 6) latencia: AUTOREPORTADA y dependiente del entorno del submitter. verify NO la re-corre — una
+  //    re-corrida mediría la máquina del árbitro, no la del submitter — así que el ✓ no la cubre
+  //    (límite declarado en SUBMISSIONS.md). Aquí solo se caza lo físicamente implausible.
+  const lats = rs.flatMap((r: any) => (Array.isArray(r.latenciasMs) ? r.latenciasMs : [])).filter((x: any) => Number.isFinite(x) && x >= 0);
+  if (!dry && lats.length) {
+    const p50 = [...lats].sort((a: number, b: number) => a - b)[Math.floor(lats.length / 2)];
+    if (p50 < 100) avisos.push(`latencia p50 implausible (${p50} ms/turno de LLM): la latencia es autoreportada y el ✓ de verificación no la cubre — revísala en el PR`);
+  }
+
+  // 7) divulgación de coste: $/conversación desde tokens reales
   const uso = rs.reduce((a: Uso, r: any) => sumarUso(a, r.usoCerebro ?? USO_CERO), { ...USO_CERO });
   const coste = costeUSD(m.modelos?.cerebro ?? "?", uso);
   const costePorConv = rs.length ? coste / rs.length : 0;
@@ -220,11 +229,12 @@ export async function verificar(path: string, opts: { seed?: number; frac?: numb
 // ── seal-hidden: compromiso público del split oculto ──
 // Publica el digest SIN publicar los escenarios: cuando salga un score oficial, cualquiera puede
 // comprobar que el set estaba fijado desde esta fecha y no se retocó después de ver submissions.
-export function sellarHidden(): string {
-  const { escenarios, digest } = cargarDataset("hidden");
-  writeFileSync(COMPROMISO_HIDDEN, `# Compromiso del split oculto de CloseBench: prueba que el set estaba fijado en esta fecha, sin publicarlo.
+export function sellarHidden(dominio = DOMINIO_DEFECTO): string {
+  const { escenarios, digest, version } = cargarDataset("hidden", dominio);
+  writeFileSync(compromisoDe(dominio), `# Compromiso del split oculto de CloseBench: prueba que el set estaba fijado en esta fecha, sin publicarlo.
 # Mismo algoritmo que el split público (lib/dataset.ts): sha256 sobre scenarios-hidden/*.json (orden alfabético) + offer.json, primeros 12 hex.
-version: ${DATASET_VERSION}
+dominio: ${dominio}
+version: ${version}
 digest: ${digest}
 escenarios: ${escenarios.length}
 sellado: ${stamp()}
@@ -273,6 +283,8 @@ async function selftest() {
   // Stage 4: el dominio tampoco es re-etiquetable — el digest se coteja contra el dataset de ESE dominio
   assert(dopar("dominio-cruzado", (j) => { j.manifiesto.dataset.domain = "saas"; }).errores.length, "rechaza un informe re-etiquetado a otro dominio (digest de otro dataset)");
   assert(dopar("dominio-desconocido", (j) => { j.manifiesto.dataset.domain = "inventado"; }).errores.length, "rechaza un dominio que no existe");
+  // la latencia es autoreportada (el ✓ no la cubre): lo único mecánico es cazar lo físicamente implausible
+  assert(dopar("latencia-fabricada", (j) => { j.manifiesto.dry = false; j.manifiesto.modelos.comprador = "claude-sonnet-5"; for (const r of j.resultados) r.latenciasMs = [1, 1, 1]; }).avisos.some((a) => a.includes("latencia")), "avisa de una latencia p50 implausible (<100 ms/turno)");
 
   console.log("\n[4/7] verify reproduce un dry determinista al 100%");
   const ver = await verificar(sub, { seed: 42 });
@@ -322,6 +334,7 @@ if (esCli) {
       seed: { type: "string", default: "7" },
       frac: { type: "string", default: "0.2" },
       umbral: { type: "string", default: "0.8" },
+      domain: { type: "string", default: DOMINIO_DEFECTO }, // solo seal-hidden: validate/verify lo leen del manifiesto
     },
   });
   const [cmd, objetivo] = positionals;
@@ -341,12 +354,12 @@ if (esCli) {
     if (ver.veredicto === "DIVERGENT") console.log("La entrada queda RETENIDA: contacta al submitter (nunca se descarta en silencio). GOVERNANCE.md.");
     process.exit(ver.veredicto === "DIVERGENT" ? 1 : 0);
   } else if (cmd === "seal-hidden") {
-    const digest = sellarHidden();
-    console.log(`🔏 compromiso escrito en ${COMPROMISO_HIDDEN} (digest ${digest}). Commitea ESTE fichero; scenarios-hidden/ jamás.`);
+    const digest = sellarHidden(flags.domain);
+    console.log(`🔏 compromiso escrito en ${compromisoDe(flags.domain)} (digest ${digest}). Commitea ESTE fichero; scenarios-hidden/ jamás.`);
   } else if (cmd === "selftest") {
     await selftest();
   } else {
-    console.error("Uso: node submission.ts validate <report.json> | verify <report.json> [--seed N] [--frac 0.2] [--umbral 0.8] | seal-hidden | selftest");
+    console.error("Uso: node submission.ts validate <report.json> | verify <report.json> [--seed N] [--frac 0.2] [--umbral 0.8] | seal-hidden [--domain d] | selftest");
     process.exit(1);
   }
 }

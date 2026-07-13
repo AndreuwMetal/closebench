@@ -28,7 +28,11 @@ export const dirSplit = (split: Split, dominio = DOMINIO_DEFECTO) => {
 };
 export const ofertaDe = (dominio = DOMINIO_DEFECTO) =>
   join(dominio === DOMINIO_DEFECTO ? RAIZ : join(RAIZ, "domains", dominio), "offer.json");
-export const COMPROMISO_HIDDEN = join(RAIZ, "scenarios-hidden.sha256"); // solo realestate tiene split oculto hoy
+// Compromiso público del split oculto, POR dominio: el de realestate vive en la raíz (histórico);
+// el de un dominio nuevo, junto a su dataset (domains/<d>/scenarios-hidden.sha256).
+export const compromisoDe = (dominio = DOMINIO_DEFECTO) =>
+  join(dominio === DOMINIO_DEFECTO ? RAIZ : join(RAIZ, "domains", dominio), "scenarios-hidden.sha256");
+export const COMPROMISO_HIDDEN = compromisoDe(); // realestate, el único sellado hoy
 
 // tier: 1 = señal de compra, un paso al objetivo · 2 = descubrimiento/objeciones/negociación en política
 //       3 = adversario, ambiguo o filo de política: un paso en falso es VIOLACIÓN, no solo venta perdida
@@ -76,9 +80,10 @@ export function cargarDataset(split: Split = "public", dominio = DOMINIO_DEFECTO
 }
 
 // Digest y tamaño del split oculto sin tenerlo: el compromiso publicado en el repo.
-export function compromisoHidden(): { digest: string; escenarios: number } | null {
-  if (!existsSync(COMPROMISO_HIDDEN)) return null;
-  const texto = readFileSync(COMPROMISO_HIDDEN, "utf8");
+export function compromisoHidden(dominio = DOMINIO_DEFECTO): { digest: string; escenarios: number } | null {
+  const path = compromisoDe(dominio);
+  if (!existsSync(path)) return null;
+  const texto = readFileSync(path, "utf8");
   const digest = texto.match(/digest:\s*([0-9a-f]{12})/)?.[1];
   const n = texto.match(/escenarios:\s*(\d+)/)?.[1];
   return digest ? { digest, escenarios: Number(n ?? 0) } : null;

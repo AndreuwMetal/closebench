@@ -20,7 +20,7 @@ import { arrancarMocks, type Capturas } from "./lib/mocks.ts";
 import { chatClaude, costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
 import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/util.ts";
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
-import { cargarDataset, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
+import { cargarDataset, DOMINIOS, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
 import { sueloPrecio } from "./lib/policy.ts";
 
 const ENV_PATH = join(import.meta.dirname, ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH);
@@ -44,6 +44,7 @@ const DRY = !!args.dry;
 const HTTP = args.protocol === "http";
 if (!["webhook", "http"].includes(args.protocol!)) { console.error(`--protocol debe ser "webhook" o "http", no "${args.protocol}"`); process.exit(1); }
 if (!["public", "hidden"].includes(args.split!)) { console.error(`--split debe ser "public" o "hidden", no "${args.split}"`); process.exit(1); }
+if (!DOMINIOS[args.domain!]) { console.error(`--domain debe ser uno de: ${Object.keys(DOMINIOS).join(", ")} — no "${args.domain}" (dominios: docs/DOMAINS.md)`); process.exit(1); }
 const SPLIT = args.split as Split;
 const DOMINIO = args.domain!;
 const K = Math.max(1, Number(args.k));

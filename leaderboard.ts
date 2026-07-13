@@ -8,7 +8,7 @@ import { join, basename } from "node:path";
 import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
 import { validar } from "./submission.ts";
-import { RAIZ } from "./lib/dataset.ts";
+import { RAIZ, DOMINIOS } from "./lib/dataset.ts";
 import { stamp, pct, passPorEscenario } from "./lib/util.ts";
 
 const { values: flags } = parseArgs({
@@ -94,9 +94,11 @@ const tabla = (es: Entrada[]) => {
 
 const seccionGrupo = (k: string, es: Entrada[]) => {
   const [split, dominio, version, digest] = k.split("|");
+  // Un dominio Preview no tiene juez validado: sus números son señal de iteración se mire como se mire.
+  const preview = DOMINIOS[dominio]?.estado === "preview" ? " · ⚠️ **Preview domain** (ground truth not judge-validated — [docs/DOMAINS.md](docs/DOMAINS.md))" : "";
   const titulo = split === "hidden"
-    ? `## Official board — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · hidden split`
-    : `## Iteration results — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · public split (not official: for development and debugging)`;
+    ? `## Official board — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · hidden split${preview}`
+    : `## Iteration results — domain **${dominio}** · dataset ${version} · digest \`${digest}\` · public split (not official: for development and debugging)${preview}`;
   // El board OFICIAL solo lista entradas con ✓ del árbitro: en un checkout sin scenarios-hidden/ la
   // validación de un run "hidden" solo pudo cotejar digest y tamaño contra el compromiso, así que sin
   // re-corrida del mantenedor una entrada oculta no rankea — se lista como pendiente, no se descarta.
@@ -124,7 +126,7 @@ const md = `# CloseBench Leaderboard
 
 > Regenerated with \`npm run leaderboard\` from [\`submissions/\`](submissions/) — how to submit: [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md).
 > Headline metric is **pass^k** (reliability across k runs), never best-of-k. Violations are automatic scenario fails — the compliance gate is inside the number, not next to it.
-> **✓ Checked** = a maintainer re-ran a seeded subset and the outcomes reproduced; the seed is published, the stamp is sha-bound to the report. Scores are only comparable within one domain + dataset version + digest + split: tables never mix them, and there is no cross-domain composite score ([docs/DOMAINS.md](docs/DOMAINS.md)). **p50 lat** = median agent response time per turn, when the report carries it.
+> **✓ Checked** = a maintainer re-ran a seeded subset and the outcomes reproduced; the seed is published, the stamp is sha-bound to the report. Scores are only comparable within one domain + dataset version + digest + split: tables never mix them, and there is no cross-domain composite score ([docs/DOMAINS.md](docs/DOMAINS.md)). **p50 lat** = median agent response time per turn, when the report carries it — **self-reported** by the submitter's run environment; the ✓ re-run verifies outcomes, not latency ([docs/SUBMISSIONS.md](docs/SUBMISSIONS.md)).
 
 _Last regenerated: ${stamp()}._
 
