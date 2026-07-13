@@ -62,7 +62,7 @@ Code-level guardrail blocks (`eventos.tipo = guardrail:*`) are folded in as viol
 
 A benchmark is only a referent if you can't overfit to it. CloseBench's plan (staged in the [ROADMAP](ROADMAP.md)):
 
-- **Versioned datasets.** ✅ Scores are only comparable within a benchmark version. The set is frozen as **v1.0** and every run hashes `scenarios/*.json` + `offer.json` into a **dataset digest** stamped on the report; a scenario or rubric change moves the digest and bumps the version (SWE-bench / HELM practice).
+- **Versioned datasets.** ✅ Scores are only comparable within a benchmark version. The set is frozen as **v1.1** and every run hashes `scenarios/*.json` + `offer.json` into a **dataset digest** stamped on the report; a scenario or rubric change moves the digest and bumps the version (SWE-bench / HELM practice).
 - **A held-out / hidden set.** A public split for iteration and a hidden split for the *official* score, so leaderboard numbers reflect generalization, not memorization ([SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified/) / live-benchmark practice).
 - **Canary strings.** A GUID embedded in the dataset so model trainers can detect and exclude it (BIG-bench convention).
 - **Swappable offer + procedural personas.** The offer under test and buyer personas can be rotated, so an agent tuned to *this* offer doesn't transfer its cheating.

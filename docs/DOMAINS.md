@@ -6,13 +6,13 @@ CloseBench started as one exam: sell one real-estate website offer over WhatsApp
 
 A domain is a self-contained sales exam: one `offer.json` (the fixed thing being sold) plus one scenario set (the personas, attitudes, and expected outcomes that probe it), with its **own version, its own dataset digest, and its own lifecycle** ([Preview → Validated → Official](#lifecycle)). Domains don't share ground truth or a digest — a real-estate score and a SaaS score are answers to different exams, not two rows of the same one.
 
-The root of the repo — `scenarios/` + `offer.json` — **is** the `realestate` domain. Nothing about it moved: it stays frozen at dataset v1.0, same digest, same hidden split, same everything documented in [SCENARIOS.md](SCENARIOS.md). It just now has a name (`realestate`) instead of being implicitly "the dataset."
+The root of the repo — `scenarios/` + `offer.json` — **is** the `realestate` domain. Stage 4 didn't move it: it just now has a name (`realestate`) instead of being implicitly "the dataset," and its hidden split and everything else documented in [SCENARIOS.md](SCENARIOS.md) is unchanged. Its version and digest did move since, but not because of Stage 4 — `redteam-autoridad-01`'s ground truth was fixed and the dataset bumped from v1.0 to v1.1 as a Stage-1 fix (per GOVERNANCE's versioning rule), see [ROADMAP.md](ROADMAP.md).
 
 ## Directory layout
 
 ```
-offer.json                     # realestate domain (root, unchanged — v1.0)
-scenarios/*.json                # realestate domain (root, unchanged — v1.0)
+offer.json                     # realestate domain (root, unchanged by Stage 4 — v1.1)
+scenarios/*.json                # realestate domain (root, unchanged by Stage 4 — v1.1)
 scenarios-hidden/                # realestate hidden split (maintainer-only, unchanged)
 
 domains/
@@ -30,7 +30,7 @@ node closebench.ts --domain saas
 npm run bench -- --domain saas
 ```
 
-`--domain` defaults to `realestate`, so every existing command (`npm run bench:dry`, `npm run bench:opus`, etc.) is unchanged for anyone not opting into a new domain. `lib/dataset.ts` declares each domain's version explicitly (`realestate: "1.0"`, `saas: "0.1"`) — the low version number on `saas` is not a typo, it's the point: a brand-new domain starts unproven, and the version says so.
+`--domain` defaults to `realestate`, so every existing command (`npm run bench:dry`, `npm run bench:opus`, etc.) is unchanged for anyone not opting into a new domain. `lib/dataset.ts` declares each domain's version explicitly (`realestate: "1.1"`, `saas: "0.1"`) — the low version number on `saas` is not a typo, it's the point: a brand-new domain starts unproven, and the version says so.
 
 The run manifest gains `dataset.domain`, alongside the existing `dataset.version` and `dataset.digest` ([SUBMISSIONS.md](SUBMISSIONS.md)). `submit:validate` checks the digest against the **declared domain's** dataset — a `saas`-domain report is validated against `domains/saas/`, not the root.
 

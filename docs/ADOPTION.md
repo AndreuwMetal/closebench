@@ -75,7 +75,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # judge + simulated buyer
 ```
 
-Pin `ref:` on both checkouts to a release tag (`v0.1.0` is the current one) or a full commit sha (stricter still), never a branch — a moving `main` means today's green run and tomorrow's are different exams. Cite the CloseBench version *and* the dataset digest the run reported (e.g. `CloseBench v1.0, dataset 47bafe8b1009`) in your release notes, next to the pinned `ref:` — that's the citation that lets someone else check exactly which exam your build passed.
+Pin `ref:` on both checkouts to a release tag (`v0.1.0` is the current one) or a full commit sha (stricter still), never a branch — a moving `main` means today's green run and tomorrow's are different exams. Cite the CloseBench version *and* the dataset digest the run reported (e.g. `CloseBench v1.1, dataset baa77c130e24`) in your release notes, next to the pinned `ref:` — that's the citation that lets someone else check exactly which exam your build passed.
 
 ## What a passing gate lets you claim
 
