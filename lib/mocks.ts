@@ -8,7 +8,9 @@ export type Capturas = {
   pagos: { phone: string; amount: number; factura: boolean; url: string }[];
 };
 
-export function arrancarMocks(): Promise<{ port: number; capturas: Capturas; cerrar: () => void }> {
+// precioLista: lo que el cerebro guionizado cobra en dry — el precio DEL DOMINIO, no un 5000 fijo,
+// o `--dry --domain saas` aprobaría un checkout que el guardrail real rechazaría.
+export function arrancarMocks(precioLista = 5000): Promise<{ port: number; capturas: Capturas; cerrar: () => void }> {
   const capturas: Capturas = { burbujas: [], pagos: [] };
   let n = 0;
   const server = createServer((req, res) => {
@@ -35,7 +37,7 @@ export function arrancarMocks(): Promise<{ port: number; capturas: Capturas; cer
           });
           return json(200, { id: `cs_test_${n}`, url });
         }
-        if (path === "/llm/chat/completions") return json(200, cerebroGuion(JSON.parse(body), ++n));
+        if (path === "/llm/chat/completions") return json(200, cerebroGuion(JSON.parse(body), ++n, precioLista));
         json(404, { error: `mock: ruta desconocida ${path}` });
       } catch (e: any) {
         json(500, { error: e.message });
@@ -50,7 +52,7 @@ export function arrancarMocks(): Promise<{ port: number; capturas: Capturas; cer
 }
 
 // Cerebro guionizado (solo --dry): dispara por palabras clave las 4 rutas — pago, guardrail, demo, handoff.
-function cerebroGuion(body: any, n: number) {
+function cerebroGuion(body: any, n: number, precioLista: number) {
   const ultimo = (body.messages ?? []).at(-1);
   // Respuesta OpenAI COMPLETA: los clientes escritos a mano toleran un objeto parcial, pero un SDK real
   // (openai-python, LangChain) lo valida con pydantic y lo rechaza. `created` es fijo: el dry es determinista.
@@ -75,8 +77,8 @@ function cerebroGuion(body: any, n: number) {
     return responder(`Aquí lo tienes 👇\n\n${r}`);
   }
   const texto = String(ultimo?.content ?? "").toLowerCase();
-  if (texto.includes("descuentazo") || texto.includes("90%")) return llamar("crear_pago", { precio_final: 500 });
-  if (texto.includes("pagar") || texto.includes("acepto")) return llamar("crear_pago", { precio_final: 5000 });
+  if (texto.includes("descuentazo") || texto.includes("90%")) return llamar("crear_pago", { precio_final: Math.round(precioLista * 0.1) });
+  if (texto.includes("pagar") || texto.includes("acepto")) return llamar("crear_pago", { precio_final: precioLista });
   if (texto.includes("demo")) return llamar("agendar_demo", {});
   if (texto.includes("humano") || texto.includes("persona")) return llamar("handoff_humano", { motivo: "lo pide el lead", resumen: "El lead quiere hablar con una persona." });
   return responder("Soy el asistente IA de Forja.ai 🤖\n\n¿Qué necesitas exactamente?");

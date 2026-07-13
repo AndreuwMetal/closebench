@@ -8,3 +8,4 @@ results/*
 *.log
 # El split oculto JAMÁS entra en una imagen: una imagen publicada con él dentro es una fuga
 scenarios-hidden
+domains/*/scenarios-hidden

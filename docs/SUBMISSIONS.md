@@ -15,7 +15,7 @@ The design premise: **the submission format already existed.** Every run writes 
 
 Offline, exit-code driven, CI-friendly. A submission fails if:
 
-- **Manifest incomplete** — version, digest, split, k, protocol, conformance, `sut.cmd` + prompt, all three model ids (brain, buyer, judge), harness git + node. A score without its full configuration is a screenshot.
+- **Manifest incomplete** — version, digest, split, k, protocol, conformance, `sut.cmd` + prompt, all three model ids (brain, buyer, judge), harness git + node. A score without its full configuration is a screenshot. `dataset.domain` is checked too: an unknown domain is rejected; a *missing* one defaults to `realestate` with a warning (pre-Stage-4 reports predate the field), and the digest is then checked against **that domain's** dataset — so relabeling a run to another domain dies here, not on the board.
 - **Self-declared division** — `conformidad` is derived from the protocol (`http` = Closed, `webhook` = Open) and checked against it; you don't choose your division. `k` must be an integer ≥ 1 (a `k: 0` would switch off the runs-per-scenario check and allow cherry-picking runs inside a covered set).
 - **Any transcript missing or empty** — trajectories are mandatory; a report with stripped conversations is unverifiable and gets rejected, not trusted.
 - **Any technical error in a run** — a conversation that died before the judge saw it was never graded. "0 violations" on an incomplete run is not a pass (the report itself already says NO CITABLE; validate enforces it).
@@ -45,14 +45,15 @@ Public scenarios (`scenarios/`) are for iteration and debugging. The **official 
 
 - `--split hidden` runs it; the report stamps `dataset.split` and the hidden digest.
 - The repo commits `scenarios-hidden.sha256` — a **commitment** (digest + scenario count + seal date) proving the hidden set was fixed at a point in time without revealing it. When maintainers publish a hidden-split score, anyone can check the digest against the commitment: the set couldn't have been tuned after seeing submissions.
-- Re-seal (`npm run hidden:seal`) only on a version bump, with the ROADMAP noting why.
+- Re-seal (`npm run hidden:seal`, per domain with `-- --domain <name>`) only on a version bump, with the ROADMAP noting why.
 - Maintainers keep the hidden set backed up **outside** any public repo. Leaking it is the one unrecoverable failure; a leak forces a refresh and a version bump.
 
 ## The leaderboard
 
 `npm run leaderboard` regenerates [`LEADERBOARD.md`](../LEADERBOARD.md) from `submissions/`. Static and deterministic: the board is a *view* over verified artifacts, not a database anyone edits.
 
-- **Grouped by (dataset version, digest, split)** — scores across versions are never mixed in one table; that's the versioning discipline made mechanical.
+- **Grouped by (domain, dataset version, digest, split)** — scores are only comparable within one (domain, version, digest, split); tables never mix domains, and versions/digests within a domain are never mixed in one table either. See [DOMAINS.md](DOMAINS.md) for what a domain is and why there's no cross-domain composite score yet.
+- **Latency p50** appears as a board column when the report carries it — per-turn agent response time (p50/p95), captured by the harness during inference. **Stated limit:** latency is **self-reported and environment-dependent** — the ✓ re-run compares outcomes (`pass^k`, violations), *not* latency, because a referee's re-run would measure the referee's machine and network, not the submitter's. `submit:validate` flags a physically implausible p50 (< 100 ms per LLM turn) as a warning for PR review; beyond that, treat the column as the submitter's claim about their own serving stack, next to — not covered by — the ✓.
 - **Divisions separated** (MLPerf): Closed (`http` protocol — fixed buyer, policy, toolset; the comparable number) and Open (`webhook` — bring your own scaffolding) are different tables, never sorted together.
 - **Headline metric: `pass^k`** (reliability), never best-of-k. Sort: `pass^k` desc, then success rate, then $/conv asc. Columns include violations and cost — a board that hides cost crowns closers nobody can afford to run.
 - **✓ Checked** appears only with a valid, sha-bound verification stamp whose verdict is REPRODUCED.

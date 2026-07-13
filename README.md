@@ -103,7 +103,7 @@ Got a score? The report JSON *is* the submission: `npm run submit:validate` it a
 
 ## Two tracks
 
-- **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 52 scenarios.
+- **CloseBench** (`npm run bench`) — the main exam. A full agentic system with tools and guardrails sells the canonical [`offer.json`](offer.json) across 52 scenarios (the default `realestate` domain; other domains via `--domain`, see [docs/DOMAINS.md](docs/DOMAINS.md)).
 - **Negotiation** (`npm run negotiation`) — a bilateral price-negotiation microbenchmark (model vs model, hidden reservation values, ZOPA / surplus-capture / correct-walkaway metrics). A pure-reasoning baseline, no tools. Adapted from the PACT / AgenticPay protocol.
 
 ---
@@ -118,7 +118,7 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | **1 · Credible v1.0 dataset** | 🎯 nearly | Frozen + digested dataset · difficulty tiers · red-team 9→15 · κ tooling. **Open:** the human labels themselves, then `CloseBench-Verified`. |
 | **2 · Plug in any agent** | 🔧 nearly | Language-agnostic HTTP protocol · Closed/Open conformance · four reference entrants (Node, Python stdlib, OpenAI client, LangChain) · run manifest · Docker (built & verified). **Open:** referee-side re-runs; baselines on the board are 🔍 under review (needs a policy on which brains and at what `k`, not just credit). |
 | **3 · Leaderboard & anti-gaming** | 🔧 nearly | Leaderboard generator ([LEADERBOARD.md](LEADERBOARD.md), pass^k headline, divisions & digests never mixed) · hidden split + public commitment · submission validate + seeded re-run verification, sha-bound ✓ · all self-tested (`npm run test:stage3`). **Open:** first verified entries (needs the baseline policy + credit); hidden set not yet played against a live judge. |
-| **4 · Generality & neutrality** | ⬜ | More domains than real estate, more languages, latency/cost SLOs, multi-org governance. |
+| **4 · Generality & neutrality** | 🔧 started | Domain seam (`--domain`) + second domain **saas** (20 scenarios, Preview: linted + dry only) · per-turn latency reported (p50/p95 + board column) · governance layer written down (submission rounds, availability tags, peer review + COI — committed design, activates with volume; [docs/GOVERNANCE.md](docs/GOVERNANCE.md), [docs/DOMAINS.md](docs/DOMAINS.md)). **Open:** saas validation against a live judge; more languages (needs native speakers); multi-org steering. |
 | **5 · Reference status** | ⬜ | Third-party audits, adoption as a release gate, citations. |
 
 **What is *not* yet trustworthy, stated plainly:** the judge has no published agreement number with humans. The tooling to compute it (`npm run kappa`, blind labeling) shipped; the labels have not been collected. Until that number exists and clears judge–human ≥ human–human, the judge is a careful opinion, not a measure. Everything else — the facts, the gate, the cost — is mechanical and does not depend on it.
@@ -132,6 +132,7 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 | [docs/RESEARCH.md](docs/RESEARCH.md) | The cited survey of referent benchmarks (τ-bench, SWE-bench, HELM, MLPerf, …) the design is grounded in |
 | [docs/ADAPTERS.md](docs/ADAPTERS.md) | Both agent contracts — webhook and HTTP — and how to plug in your agent |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | The 52-scenario taxonomy, difficulty tiers, schema, and how to add more |
+| [docs/DOMAINS.md](docs/DOMAINS.md) | Sales domains beyond real estate — layout, lifecycle (Preview → Validated → Official), how to propose one |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The stages from working harness to *the* referent |
 | [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md) | Referee's manual: submitting, validation, seeded verification, the hidden split, the board |
 | [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | The rules: neutrality, divisions, anti-gaming, versioning |

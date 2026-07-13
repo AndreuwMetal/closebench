@@ -15,20 +15,20 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
-import { cargarDataset, compromisoHidden, DATASET_VERSION, COMPROMISO_HIDDEN, RAIZ, type Split } from "./lib/dataset.ts";
+import { cargarDataset, compromisoHidden, compromisoDe, DOMINIOS, DOMINIO_DEFECTO, RAIZ, type Split } from "./lib/dataset.ts";
 import { costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
 import { stamp, passPorEscenario } from "./lib/util.ts";
 
 export type Validacion = {
   informe: { manifiesto: any; resultados: any[] };
   errores: string[]; avisos: string[];
-  dry: boolean; split: Split; costePorConv: number;
+  dry: boolean; split: Split; dominio: string; costePorConv: number;
 };
 
 // ── validate: lo que un informe tiene que demostrar antes de llamarse submission ──
 export function validar(path: string): Validacion {
   const errores: string[] = [], avisos: string[] = [];
-  const nada: Validacion = { informe: { manifiesto: {}, resultados: [] }, errores, avisos, dry: false, split: "public", costePorConv: 0 };
+  const nada: Validacion = { informe: { manifiesto: {}, resultados: [] }, errores, avisos, dry: false, split: "public", dominio: DOMINIO_DEFECTO, costePorConv: 0 };
   let informe: any;
   try { informe = JSON.parse(readFileSync(path, "utf8")); }
   catch (e) { errores.push(`no se pudo leer/parsear ${path}: ${(e as Error).message}`); return nada; }
@@ -48,6 +48,11 @@ export function validar(path: string): Validacion {
   const split: Split = m.dataset?.split ?? "public";
   if (!m.dataset?.split) avisos.push("manifiesto antiguo sin dataset.split: asumo public");
   if (!["public", "hidden"].includes(split)) errores.push(`dataset.split inválido: "${split}" (public | hidden)`);
+  // el dominio tampoco lo elige el submitter a posteriori: el digest se coteja contra el dataset de
+  // ESE dominio, así que re-etiquetar un run de realestate como "saas" muere aquí, no en el board.
+  const dominio: string = m.dataset?.domain ?? DOMINIO_DEFECTO;
+  if (!m.dataset?.domain) avisos.push(`manifiesto antiguo sin dataset.domain: asumo ${DOMINIO_DEFECTO}`);
+  if (!DOMINIOS[dominio]) errores.push(`dataset.domain desconocido: "${dominio}" (${Object.keys(DOMINIOS).join(" | ")})`);
   // la división NO la elige el submitter: se deriva del protocolo (http = Closed, webhook = Open).
   // Sin este cotejo, un run webhook se autodeclararía "Closed" y posaría en la tabla comparable.
   const confEsperada = m.protocolo === "http" ? "Closed" : m.protocolo === "webhook" ? "Open" : null;
@@ -84,15 +89,20 @@ export function validar(path: string): Validacion {
   //    entero: sin esto, un informe de `--solo calientes` (5 escenarios fáciles) luciría un pass^k
   //    perfecto en el board. --solo es para depurar, no para presumir. Para el split oculto sin
   //    tenerlo en local, vale el compromiso publicado (scenarios-hidden.sha256): digest + tamaño.
-  let esperado: { digest: string; ids: string[] | null; n: number } | null = null;
-  try { const d = cargarDataset(split); esperado = { digest: d.digest, ids: d.escenarios.map((e) => e.id), n: d.escenarios.length }; }
-  catch { const c = split === "hidden" ? compromisoHidden() : null; if (c) esperado = { digest: c.digest, ids: null, n: c.escenarios }; }
+  let esperado: { digest: string; version: string | null; ids: string[] | null; n: number } | null = null;
+  if (DOMINIOS[dominio]) {
+    try { const d = cargarDataset(split, dominio); esperado = { digest: d.digest, version: d.version, ids: d.escenarios.map((e) => e.id), n: d.escenarios.length }; }
+    // sin el split oculto en local vale su compromiso publicado (por dominio: compromisoDe)
+    catch { const c = split === "hidden" ? compromisoHidden(dominio) : null; if (c) esperado = { digest: c.digest, version: null, ids: null, n: c.escenarios }; }
+  }
   if (!esperado) errores.push(split === "hidden"
-    ? "no puedo comprobar el split oculto: ni scenarios-hidden/ ni scenarios-hidden.sha256 en este checkout"
-    : "no puedo recalcular el digest del split public en este checkout");
+    ? `no puedo comprobar el split oculto del dominio ${dominio}: ni su scenarios-hidden/ ni un compromiso publicado en este checkout`
+    : `no puedo recalcular el digest del split public del dominio ${dominio} en este checkout`);
   else {
     if (m.dataset?.digest && m.dataset.digest !== esperado.digest)
-      errores.push(`digest del dataset no coincide: informe ${m.dataset.digest} ≠ checkout ${esperado.digest} — score no comparable con este dataset`);
+      errores.push(`digest del dataset no coincide: informe ${m.dataset.digest} ≠ checkout ${esperado.digest} (dominio ${dominio}) — score no comparable con este dataset`);
+    if (esperado.version && m.dataset?.version && String(m.dataset.version) !== esperado.version)
+      errores.push(`versión del dataset no coincide: informe ${m.dataset.version} ≠ ${esperado.version} (dominio ${dominio})`);
     if (!dry) {
       const idsInforme = new Set(rs.map((r: any) => r.id as string));
       if (esperado.ids) {
@@ -111,14 +121,23 @@ export function validar(path: string): Validacion {
   if (!dry && m.modelos?.juez && m.modelos?.cerebro && String(m.modelos.juez) === String(m.modelos.cerebro))
     avisos.push(`juez y cerebro son el mismo modelo (${m.modelos.juez}): sesgo de autopreferencia`);
 
-  // 6) divulgación de coste: $/conversación desde tokens reales
+  // 6) latencia: AUTOREPORTADA y dependiente del entorno del submitter. verify NO la re-corre — una
+  //    re-corrida mediría la máquina del árbitro, no la del submitter — así que el ✓ no la cubre
+  //    (límite declarado en SUBMISSIONS.md). Aquí solo se caza lo físicamente implausible.
+  const lats = rs.flatMap((r: any) => (Array.isArray(r.latenciasMs) ? r.latenciasMs : [])).filter((x: any) => Number.isFinite(x) && x >= 0);
+  if (!dry && lats.length) {
+    const p50 = [...lats].sort((a: number, b: number) => a - b)[Math.floor(lats.length / 2)];
+    if (p50 < 100) avisos.push(`latencia p50 implausible (${p50} ms/turno de LLM): la latencia es autoreportada y el ✓ de verificación no la cubre — revísala en el PR`);
+  }
+
+  // 7) divulgación de coste: $/conversación desde tokens reales
   const uso = rs.reduce((a: Uso, r: any) => sumarUso(a, r.usoCerebro ?? USO_CERO), { ...USO_CERO });
   const coste = costeUSD(m.modelos?.cerebro ?? "?", uso);
   const costePorConv = rs.length ? coste / rs.length : 0;
   if (!dry && !uso.entrada && !uso.salida) avisos.push("sin uso de tokens registrado: divulgación de coste vacía");
   else if (!dry && coste === 0) avisos.push(`modelo sin tarifa en PRECIOS (${m.modelos?.cerebro}): el coste reportado será $0 — divulgación incompleta`);
 
-  return { informe, errores, avisos, dry, split, costePorConv };
+  return { informe, errores, avisos, dry, split, dominio, costePorConv };
 }
 
 // ── verify: la re-corrida del árbitro ──
@@ -161,7 +180,7 @@ export async function verificar(path: string, opts: { seed?: number; frac?: numb
   // re-corre SOLO el subconjunto, con la config pinneada del manifiesto (split, protocolo, prompt, k, SUT)
   const scratch = mkdtempSync(join(tmpdir(), "closebench-verify-"));
   const argsBench = ["closebench.ts", "--solo", sel.join(","), "--k", String(m.dataset.k), "--protocol", m.protocolo,
-    "--split", v.split, "--prompt", m.sut.prompt, "--concurrencia", "2", "--out", scratch];
+    "--split", v.split, "--domain", v.dominio, "--prompt", m.sut.prompt, "--concurrencia", "2", "--out", scratch];
   if (v.dry) argsBench.push("--dry");
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (!v.dry) {
@@ -210,11 +229,12 @@ export async function verificar(path: string, opts: { seed?: number; frac?: numb
 // ── seal-hidden: compromiso público del split oculto ──
 // Publica el digest SIN publicar los escenarios: cuando salga un score oficial, cualquiera puede
 // comprobar que el set estaba fijado desde esta fecha y no se retocó después de ver submissions.
-export function sellarHidden(): string {
-  const { escenarios, digest } = cargarDataset("hidden");
-  writeFileSync(COMPROMISO_HIDDEN, `# Compromiso del split oculto de CloseBench: prueba que el set estaba fijado en esta fecha, sin publicarlo.
+export function sellarHidden(dominio = DOMINIO_DEFECTO): string {
+  const { escenarios, digest, version } = cargarDataset("hidden", dominio);
+  writeFileSync(compromisoDe(dominio), `# Compromiso del split oculto de CloseBench: prueba que el set estaba fijado en esta fecha, sin publicarlo.
 # Mismo algoritmo que el split público (lib/dataset.ts): sha256 sobre scenarios-hidden/*.json (orden alfabético) + offer.json, primeros 12 hex.
-version: ${DATASET_VERSION}
+dominio: ${dominio}
+version: ${version}
 digest: ${digest}
 escenarios: ${escenarios.length}
 sellado: ${stamp()}
@@ -260,6 +280,11 @@ async function selftest() {
   assert(dopar("dry-como-real", (j) => { j.manifiesto.dry = false; j.manifiesto.modelos.comprador = "claude-sonnet-5"; j.manifiesto.modelos.juez = "claude-opus-4-8"; }).errores.length, "rechaza un dry re-etiquetado como real (cobertura parcial + ids ajenos)");
   assert(dopar("k-cero", (j) => { j.manifiesto.dataset.k = 0; }).errores.length, "rechaza k=0 (apagaría el chequeo de corridas por escenario)");
   assert(dopar("division-falsa", (j) => { j.manifiesto.conformidad = "Closed"; }).errores.length, "rechaza una división que no corresponde al protocolo");
+  // Stage 4: el dominio tampoco es re-etiquetable — el digest se coteja contra el dataset de ESE dominio
+  assert(dopar("dominio-cruzado", (j) => { j.manifiesto.dataset.domain = "saas"; }).errores.length, "rechaza un informe re-etiquetado a otro dominio (digest de otro dataset)");
+  assert(dopar("dominio-desconocido", (j) => { j.manifiesto.dataset.domain = "inventado"; }).errores.length, "rechaza un dominio que no existe");
+  // la latencia es autoreportada (el ✓ no la cubre): lo único mecánico es cazar lo físicamente implausible
+  assert(dopar("latencia-fabricada", (j) => { j.manifiesto.dry = false; j.manifiesto.modelos.comprador = "claude-sonnet-5"; for (const r of j.resultados) r.latenciasMs = [1, 1, 1]; }).avisos.some((a) => a.includes("latencia")), "avisa de una latencia p50 implausible (<100 ms/turno)");
 
   console.log("\n[4/7] verify reproduce un dry determinista al 100%");
   const ver = await verificar(sub, { seed: 42 });
@@ -309,6 +334,7 @@ if (esCli) {
       seed: { type: "string", default: "7" },
       frac: { type: "string", default: "0.2" },
       umbral: { type: "string", default: "0.8" },
+      domain: { type: "string", default: DOMINIO_DEFECTO }, // solo seal-hidden: validate/verify lo leen del manifiesto
     },
   });
   const [cmd, objetivo] = positionals;
@@ -328,12 +354,12 @@ if (esCli) {
     if (ver.veredicto === "DIVERGENT") console.log("La entrada queda RETENIDA: contacta al submitter (nunca se descarta en silencio). GOVERNANCE.md.");
     process.exit(ver.veredicto === "DIVERGENT" ? 1 : 0);
   } else if (cmd === "seal-hidden") {
-    const digest = sellarHidden();
-    console.log(`🔏 compromiso escrito en ${COMPROMISO_HIDDEN} (digest ${digest}). Commitea ESTE fichero; scenarios-hidden/ jamás.`);
+    const digest = sellarHidden(flags.domain);
+    console.log(`🔏 compromiso escrito en ${compromisoDe(flags.domain)} (digest ${digest}). Commitea ESTE fichero; scenarios-hidden/ jamás.`);
   } else if (cmd === "selftest") {
     await selftest();
   } else {
-    console.error("Uso: node submission.ts validate <report.json> | verify <report.json> [--seed N] [--frac 0.2] [--umbral 0.8] | seal-hidden | selftest");
+    console.error("Uso: node submission.ts validate <report.json> | verify <report.json> [--seed N] [--frac 0.2] [--umbral 0.8] | seal-hidden [--domain d] | selftest");
     process.exit(1);
   }
 }

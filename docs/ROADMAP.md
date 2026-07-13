@@ -50,14 +50,17 @@ CloseBench is a working benchmark today. Becoming the *reference* sales benchmar
 - ✅ **Versioning discipline, made mechanical** — was already policy (digest on every report); now `validate` hard-fails on digest mismatch and the board can't render two digests in one table.
 - 🔜 **First verified entries** — the board is honestly empty. Blocked on the same baseline policy as Stage 2's 🔍 (which brains, at what `k`, republish-on-bump or pin), plus API credit. The first real entry should be reference-GLM at `k = 8`, verified with a published seed.
 
-### Stage 4 — Generality & neutrality 🌐
+### Stage 4 — Generality & neutrality 🌐 (in progress)
 
 *Goal: bigger than one offer, bigger than one author.*
 
-- **More domains** beyond real-estate: B2B SaaS, insurance, high-ticket services — proving the method generalizes. Structured as distinct **sales sub-environments** (inbound SaaS demo, e-commerce upsell, high-ticket consultative, retention/save), one composite score with a per-dimension breakdown (AgentBench).
-- **More languages**, with native-speaker review of personas and rubric.
-- **Latency & cost SLOs** as first-class axes (a closer too slow or too expensive for WhatsApp isn't good).
-- **Neutral governance** — move decisions to a small multi-org group with conflict-of-interest rules (the MLPerf/MLCommons model). A benchmark controlled by one vendor never becomes *the* referent. Concretely: **versioned submission rounds** on a fixed calendar with frozen rules, **availability tags** (Available / Preview / RDI), and **mandatory mutual peer-review + spot-audit** (every submitter reviews another; a COI-free auditor replays against sealed seeds).
+- ✅ **Domain seam** — `--domain` (default `realestate`, the untouched frozen v1.0 at the repo root). A domain is `domains/<name>/offer.json` + `scenarios/`, with **its own version and digest**; the judge's price policy, the dry brain's checkout, and the report all derive from the domain's offer (three hardcoded "5000 €" would have silently scored the new domain against real-estate prices). Boards group by (domain, version, digest, split) and **never mix domains**; there is deliberately **no composite score** until ≥ 2 domains have verified entries — averaging a validated domain with a Preview one would launder the weaker number (per-domain breakdown first, composite when it means something; AgentBench's shape, eventually). [DOMAINS.md](DOMAINS.md)
+- ✅ **Second domain: `saas` (Preview)** — Kanaly, a fictional WhatsApp-inbox + CRM sold as an annual plan (list 3 000 €, floor 2 700 €), 20 scenarios mirroring the taxonomy (tiers 2/10/8, ES 12/EN 8) incl. 4 domain-specific red-team angles (zero-breach guarantee bait, CEO-authority discount spoof, prompt injection, competitor defamation). ⚠️ Same caveat as every new set: linted + dry-run only, **never played against a live judge** — Preview until validated (lifecycle in [DOMAINS.md](DOMAINS.md)).
+- ✅ **Latency as a reported axis** — per-turn agent response time captured during inference (webhook's turn-closing silence is subtracted; it isn't the agent's time), reported as p50/p95 per run and a **p50 column on the board**. SLO *thresholds* are not enforced by the harness: a threshold is a per-round governance parameter ([GOVERNANCE.md](GOVERNANCE.md)) — hardcoding one today would just encode this author's guess.
+- ✅ **Governance layer, written down before it's needed** — versioned **submission rounds** (frozen rules per round), **availability tags** (Available / Preview / RDI), **mutual peer-review + spot-audit** with conflict-of-interest rules, and the multi-org steering end-state. Committed design, not live process — it activates when submission volume exists, and the docs say so honestly. [GOVERNANCE.md](GOVERNANCE.md)
+- 🔜 **Validate `saas` against a live judge** (discrimination control re-run inside the domain: reference prompt must still beat `bad.md`), then seed its hidden split.
+- 🔜 **More languages**, with native-speaker review of personas and rubric — blocked on native speakers, not code.
+- 🔜 **Neutral governance, activated** — move decisions to a small multi-org group with conflict-of-interest rules (the MLPerf/MLCommons model). A benchmark controlled by one vendor never becomes *the* referent. Blocked on partner orgs and submission volume; the rules they'd adopt are already frozen above.
 
 ### Stage 5 — Reference status 📌
 
