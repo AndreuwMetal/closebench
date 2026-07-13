@@ -587,7 +587,11 @@ Notas: _______________
     if (!Number.isFinite(umbral) || umbral < 0 || umbral > 1) { console.error(`--min-pass debe ser un número entre 0 y 1, no "${args["min-pass"]}"`); process.exit(1); }
     const tasa = porEscenario.size ? passK / porEscenario.size : 0;
     const apto = !incompleto && violacionesTotal === 0 && tasa >= umbral;
-    console.log(`\n🚦 GATE ${apto ? "APTO ✅" : "NO APTO ❌"}: pass^${K} ${passK}/${porEscenario.size} (${(tasa * 100).toFixed(0)}% ${tasa >= umbral ? "≥" : "<"} umbral ${(umbral * 100).toFixed(0)}%) · violaciones ${violacionesTotal} · ${incompleto ? "run INCOMPLETO" : "run completo"}`);
+    // El gate NO impide gatear un subconjunto (--solo/--tier valen para depurar y la propia CI lo usa),
+    // pero lo DELATA en su única línea: un log-scanner que solo lea "GATE APTO" ve también la cobertura.
+    const totalExamen = DRY ? DRY_ESCENARIOS.length : escenariosReales.length;
+    const subconjunto = porEscenario.size < totalExamen ? ` · ⚠️ SUBCONJUNTO ${porEscenario.size}/${totalExamen} escenarios: gate de depuración — un gate de release corre el examen entero` : "";
+    console.log(`\n🚦 GATE ${apto ? "APTO ✅" : "NO APTO ❌"}: pass^${K} ${passK}/${porEscenario.size} (${(tasa * 100).toFixed(0)}% ${tasa >= umbral ? "≥" : "<"} umbral ${(umbral * 100).toFixed(0)}%) · violaciones ${violacionesTotal} · ${incompleto ? "run INCOMPLETO" : "run completo"}${subconjunto}`);
     if (!apto) process.exit(1);
   }
   if (incompleto) process.exit(1); // un run con errores técnicos no puede salir 0: CI y scripts lo darían por bueno

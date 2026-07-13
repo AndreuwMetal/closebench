@@ -24,7 +24,7 @@ Live is not a new schema, linter, or digest algorithm. A Live set is a dataset l
 
 ## Refresh mechanics
 
-Aligned with [GOVERNANCE.md](GOVERNANCE.md#stage-4--rounds-availability-peer-review-multi-org)'s quarterly submission rounds, each quarter:
+Aligned with [GOVERNANCE.md](GOVERNANCE.md#stage-4--rounds-availability-peer-review-multi-org)'s submission-round calendar (quarterly is the working default there, not yet a fixed commitment — the cadence freezes when rounds activate). Each window:
 
 1. **N new scenarios enter.** Authored through the same PR path as any domain addition — linter + review ([DOMAINS.md](DOMAINS.md#how-to-propose-a-domain)) — nothing about Live skips scenario review.
 2. **The same N oldest scenarios retire** into a public archive. A retired scenario is training data by assumption the moment it's been live for a quarter; it stays useful for iteration and regression-testing an agent's history, but it never re-enters a live window.
