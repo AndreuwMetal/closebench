@@ -52,9 +52,8 @@ jobs:
       - uses: actions/checkout@v4
         with: { path: agent }
       # Pin the benchmark: a gate against a moving benchmark is not a gate.
-      # No release tag exists yet — pin a full commit sha (repo's commit list); switch to a tag when one is cut.
       - uses: actions/checkout@v4
-        with: { repository: AndreuwMetal/closebench, ref: <full-commit-sha>, path: closebench }
+        with: { repository: AndreuwMetal/closebench, ref: v0.1.0, path: closebench }
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: SUT_CMD="node ../agent/agent.ts" npm run bench:dry:http
@@ -67,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { path: agent }
       - uses: actions/checkout@v4
-        with: { repository: AndreuwMetal/closebench, ref: <full-commit-sha>, path: closebench }
+        with: { repository: AndreuwMetal/closebench, ref: v0.1.0, path: closebench }
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: SUT_CMD="node ../agent/agent.ts" node closebench.ts --protocol http --k 8 --min-pass 0.8
@@ -76,7 +75,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # judge + simulated buyer
 ```
 
-Pin `ref:` on both checkouts to a full commit sha (or a release tag once the repo cuts one — none exists today), never a branch — a moving `main` means today's green run and tomorrow's are different exams. Cite the CloseBench version *and* the dataset digest the run reported (e.g. `CloseBench v1.0, dataset 47bafe8b1009`) in your release notes, next to the pinned `ref:` — that's the citation that lets someone else check exactly which exam your build passed.
+Pin `ref:` on both checkouts to a release tag (`v0.1.0` is the current one) or a full commit sha (stricter still), never a branch — a moving `main` means today's green run and tomorrow's are different exams. Cite the CloseBench version *and* the dataset digest the run reported (e.g. `CloseBench v1.0, dataset 47bafe8b1009`) in your release notes, next to the pinned `ref:` — that's the citation that lets someone else check exactly which exam your build passed.
 
 ## What a passing gate lets you claim
 
