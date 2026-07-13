@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
-export const DATASET_VERSION = "1.0"; // versión del dominio por defecto (realestate)
+export const DATASET_VERSION = "1.1"; // versión del dominio por defecto (realestate)
 export const RAIZ = join(import.meta.dirname, "..");
 
 // Dominios de venta (Stage 4). Cada dominio es un dataset con SU versión y SU digest: los boards

@@ -71,7 +71,7 @@ The runner **lints every scenario on load** (even in dry mode): required fields 
 
 ## Versioning and the dataset digest
 
-The scenario set is frozen as **CloseBench v1.0**. On every run the harness hashes all `scenarios/*.json` plus `offer.json` into a 12-hex **dataset digest**, printed in the console and stamped into both the `.md` and `.json` report. Change a scenario or the offer and the digest changes — which is the point: **a score is only citable as `CloseBench v1.0 (dataset 47bafe8b1009)`**, and two scores with different digests were never measuring the same exam.
+The scenario set is frozen as **CloseBench v1.1**. On every run the harness hashes all `scenarios/*.json` plus `offer.json` into a 12-hex **dataset digest**, printed in the console and stamped into both the `.md` and `.json` report. Change a scenario or the offer and the digest changes — which is the point: **a score is only citable as `CloseBench v1.1 (dataset baa77c130e24)`**, and two scores with different digests were never measuring the same exam.
 
 ## The offer under test
 

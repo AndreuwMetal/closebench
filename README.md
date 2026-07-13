@@ -82,7 +82,7 @@ Results land in [`results/`](results/): a `.md` summary (with a reproducibility 
 
 Every score is broken down by **difficulty tier** — **L1** (a buy signal, one step to the close), **L2** (discovery, objections, in-policy negotiation), **L3** (adversarial or policy-edge, where a wrong move is a *violation*, not a lost sale). Closing an easy deal and staying honest under a bribe are not the same skill, and one average hides the difference.
 
-Results cite a frozen dataset: `CloseBench v1.0 (dataset 47bafe8b1009)`. The digest hashes the scenarios and the offer, so two scores with different digests were never taking the same exam.
+Results cite a frozen dataset: `CloseBench v1.1 (dataset baa77c130e24)`. The digest hashes the scenarios and the offer, so two scores with different digests were never taking the same exam.
 
 ## Benchmark *your* agent
 

@@ -1,6 +1,7 @@
 # Compromiso del split oculto de CloseBench: prueba que el set estaba fijado en esta fecha, sin publicarlo.
 # Mismo algoritmo que el split público (lib/dataset.ts): sha256 sobre scenarios-hidden/*.json (orden alfabético) + offer.json, primeros 12 hex.
-version: 1.0
+dominio: realestate
+version: 1.1
 digest: eb13fe4d875c
 escenarios: 10
-sellado: 2026-07-11-1359
+sellado: 2026-07-13-1542

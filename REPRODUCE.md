@@ -23,7 +23,7 @@ Public CI runs exactly this on every commit ([`.github/workflows/ci.yml`](.githu
 
 No keys, but you're now checking a *specific* score, not just the plumbing.
 
-- **Recompute the dataset digest.** `npm run bench:dry` prints the digest it hashed from `scenarios/*.json` + `offer.json` (single source of truth: [`lib/dataset.ts`](lib/dataset.ts)). Compare it to the digest cited by the claim you're auditing — e.g. `CloseBench v1.0 (dataset 47bafe8b1009)`. Mismatch means the claim isn't describing this checkout.
+- **Recompute the dataset digest.** `npm run bench:dry` prints the digest it hashed from `scenarios/*.json` + `offer.json` (single source of truth: [`lib/dataset.ts`](lib/dataset.ts)). Compare it to the digest cited by the claim you're auditing — e.g. `CloseBench v1.1 (dataset baa77c130e24)`. Mismatch means the claim isn't describing this checkout.
 - **Check a submission's structure.** `npm run submit:validate submissions/<name>.json` — rejects an incomplete manifest, missing/stripped transcripts, a technical error dressed as a pass, a digest mismatch, or partial split coverage. See [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md) for the full rejection list.
 - **Check a `✓ Checked` stamp's binding.** `submissions/<name>.checked.json` embeds the sha256 of the exact report bytes it verified — `sha256sum submissions/<name>.json` and compare. A mismatch means the report was edited after verification (the board would already show `⚠ stale`).
 - **Regenerate the board and diff.** `npm run leaderboard` rebuilds [`LEADERBOARD.md`](LEADERBOARD.md) from `submissions/` and nothing else — it's a view, not a database anyone hand-edits. After regenerating, `git diff LEADERBOARD.md` should touch **only** the `_Last regenerated: …_` timestamp line; any other change means the committed board didn't match the submissions it claims to render.
@@ -52,4 +52,4 @@ This is the same tool maintainers run before granting a ✓. It picks a **seeded
 
 To cite the *repository*: GitHub's "Cite this repository" button (top of the repo page) reads [`CITATION.cff`](CITATION.cff) automatically.
 
-To cite a *score*: name the mechanism, not just the number. A citable score carries **domain + dataset version + digest + split** — e.g. "CloseBench (realestate, v1.0, dataset `47bafe8b1009`, hidden split)". A number without that tuple was never taking the same exam as anyone else's.
+To cite a *score*: name the mechanism, not just the number. A citable score carries **domain + dataset version + digest + split** — e.g. "CloseBench (realestate, v1.1, dataset `baa77c130e24`, hidden split)". A number without that tuple was never taking the same exam as anyone else's.

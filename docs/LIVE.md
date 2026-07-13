@@ -4,13 +4,13 @@
 
 ## The threat
 
-Public scenarios sit in a public repo, which means they eventually sit in a training corpus. A model that memorized the exam doesn't demonstrate it can sell — it demonstrates it can recall. The [canary GUID](../canary.txt) ([METHODOLOGY.md](METHODOLOGY.md#contamination-versioning-and-gaming)) only detects *willing* excluders: a trainer has to choose to grep for it and drop matching documents. It does nothing to a trainer who doesn't check, and nothing at all once a scenario has already been scraped. A frozen, versioned dataset that never moves is a fixed target — the longer v1.0 stays public, the more of the model population has plausibly seen it. Live is the structural answer: refresh the exam faster than models retrain on the web, so recall stops being a viable strategy.
+Public scenarios sit in a public repo, which means they eventually sit in a training corpus. A model that memorized the exam doesn't demonstrate it can sell — it demonstrates it can recall. The [canary GUID](../canary.txt) ([METHODOLOGY.md](METHODOLOGY.md#contamination-versioning-and-gaming)) only detects *willing* excluders: a trainer has to choose to grep for it and drop matching documents. It does nothing to a trainer who doesn't check, and nothing at all once a scenario has already been scraped. A frozen, versioned dataset that never moves is a fixed target — the longer a frozen version (currently v1.1) stays public, the more of the model population has plausibly seen it. Live is the structural answer: refresh the exam faster than models retrain on the web, so recall stops being a viable strategy.
 
 ## What Live is
 
-A rolling scenario set per domain, versioned `live-YYYY.Q` (e.g. `realestate live-2026.3`) — disjoint from the frozen numbered versions (`1.0`, `0.1`, ...). The two lines serve different jobs and neither substitutes for the other:
+A rolling scenario set per domain, versioned `live-YYYY.Q` (e.g. `realestate live-2026.3`) — disjoint from the frozen numbered versions (`1.1`, `0.1`, ...). The two lines serve different jobs and neither substitutes for the other:
 
-- **Frozen versions** stay citable forever. A paper citing `v1.0 (dataset 47bafe8b1009)` stays checkable indefinitely — nobody wants "the benchmark version I cited no longer exists."
+- **Frozen versions** stay citable forever. A paper citing `v1.1 (dataset baa77c130e24)` stays checkable indefinitely — nobody wants "the benchmark version I cited no longer exists."
 - **Live** answers a different question: "is this agent good *now*," on a set young enough that contamination is implausible.
 
 Live is not a new schema, linter, or digest algorithm. A Live set is a dataset like any other domain-version — same `offer.json` + `scenarios/*.json` shape ([SCENARIOS.md](SCENARIOS.md#scenario-schema)), same structural linting (`lib/dataset.ts`), same 12-hex digest over the scenario files ([DOMAINS.md](DOMAINS.md), [METHODOLOGY.md](METHODOLOGY.md#contamination-versioning-and-gaming)) — the only thing that's new is that its version string encodes a time window instead of a monotonic number, so it can retire content that a frozen version never would.
