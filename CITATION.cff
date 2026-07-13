@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below. If you cite a specific score rather than the software itself, name domain + dataset version + digest + split (see REPRODUCE.md) — a bare number is not a citable claim."
+type: software
+title: "CloseBench: an end-to-end, compliance-gated benchmark for AI sales agents"
+authors:
+  - given-names: Andreuw
+    family-names: Metal
+    alias: AndreuwMetal
+repository-code: "https://github.com/AndreuwMetal/closebench"
+url: "https://github.com/AndreuwMetal/closebench"
+license: MIT
+version: 0.1.0
+date-released: "2026-07-13"
+keywords:
+  - benchmark
+  - llm
+  - agents
+  - sales
+  - evaluation

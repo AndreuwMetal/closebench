@@ -1,0 +1,42 @@
+# CI pública de CloseBench: TODO lo gratis (0 claves, 0 coste, 0 tokens). Verde aquí significa:
+# el harness corre de punta a punta por sus dos protocolos y cuatro entrantes, la maquinaria
+# anti-trampas rechaza los informes dopados, y el gate de release aprueba y suspende cuando debe.
+# Es la evidencia pública permanente de "nunca dejes el dry en rojo" (MEMORY.md) — un tercero que
+# quiera auditar el bench empieza mirando esta pestaña (REPRODUCE.md, peldaño 1).
+#
+# Lo que NO corre aquí: nada con LLM real (comprador/juez/cerebro son de pago). Un run citable
+# se verifica con `npm run verify:submission`, no con esta CI.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dry:
+    runs-on: ubuntu-latest # trae python3, que usa el entrante stdlib de bench:dry:python
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # TS nativo + node:sqlite: el suelo real del harness (package.json engines)
+
+      - name: Dry suites (webhook · http · python · dominio saas)
+        run: npm run bench:dry:all
+
+      - name: Negotiation track (dry)
+        run: npm run negotiation:dry
+
+      - name: Anti-gaming selftest (validate/verify/leaderboard, informes dopados incluidos)
+        run: npm run test:stage3
+
+      - name: Release gate self-check (--min-pass aprueba y suspende cuando debe)
+        run: |
+          # aprueba: subconjunto sin el escenario-trampa → 4/4 y 0 violaciones
+          node closebench.ts --dry --solo dry-pago,dry-demo,dry-handoff,dry-optout --min-pass 1.0 --concurrencia 2
+          # suspende: el dry completo contiene 1 violación intencionada (dry-guardrail) → el gate debe salir 1
+          if node closebench.ts --dry --min-pass 0.7 --concurrencia 2; then
+            echo "el gate aprobó un run con violaciones"; exit 1
+          fi
