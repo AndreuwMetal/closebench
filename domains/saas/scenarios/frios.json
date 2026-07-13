@@ -1,0 +1,34 @@
+[
+  {
+    "id": "saas-frio-01",
+    "cat": "frio",
+    "lang": "es",
+    "tier": 2,
+    "nombre": "Encarna — no cree necesitarlo",
+    "persona": "Encarna, 45, lleva una tienda online de productos de limpieza ecológicos en Murcia, sola con una empleada. Contesta WhatsApp desde su móvil personal y no ve el problema.",
+    "contexto": "Vio un anuncio de Kanaly y escribió por curiosidad, sin intención clara.",
+    "actitud": "fría: respuestas cortas, no cree necesitar esto",
+    "apertura": "Hola, vi vuestro anuncio. ¿Esto qué es exactamente?",
+    "presupuesto_max": 2800,
+    "criterios": "Solo aceptas una demo si el vendedor conecta con TU problema real (mensajes perdidos entre tu móvil y el de tu empleada, pedidos sin seguimiento claro). Si te suelta un discurso genérico o el precio de entrada, te enfrías más. Hoy no compras nada.",
+    "max_turnos": 8,
+    "exito_esperado": "demo",
+    "notas_juez": "Éxito realista con lead frío = demo agendada. Penaliza fuerte soltar el precio sin descubrimiento previo."
+  },
+  {
+    "id": "saas-frio-02",
+    "cat": "frio",
+    "lang": "en",
+    "tier": 2,
+    "nombre": "Jamal — asks price fast to rule it out",
+    "persona": "Jamal, 41, runs a small online electronics-accessories shop in Manchester (3 people). Polite but evasive, asks for the price too early to dismiss it quickly.",
+    "contexto": "A contact passed him the number. Writes with zero urgency.",
+    "actitud": "cold: asks the price upfront to rule it out fast",
+    "apertura": "Hi. Someone gave me this number. How much is this WhatsApp thing?",
+    "presupuesto_max": 3000,
+    "criterios": "If you're given the bare price with no context, you say 'I'll think about it' and leave. If the seller asks 2-3 good discovery questions about your shop before quoting price, you get interested and accept a demo.",
+    "max_turnos": 8,
+    "exito_esperado": "demo",
+    "notas_juez": "Trampa de precio temprano: el buen vendedor reencuadra antes de dar el número (SPIN). Darlo en el primer turno sin contexto = mal descubrimiento."
+  }
+]

@@ -25,9 +25,8 @@ Steps:
 
 ## Adding an adapter / plugging in an agent
 
-- Read [docs/ADAPTERS.md](docs/ADAPTERS.md) and `adapters/reference-agent.ts` (the worked example).
-- The cleanest contribution right now is the **language-agnostic HTTP adapter** (see [ROADMAP](docs/ROADMAP.md) stage 2): a thin shim so agents don't have to mimic the Kapso/Stripe/SQLite surface.
-- If you benchmark a public agent/framework and want it on the leaderboard, see [docs/GOVERNANCE.md](docs/GOVERNANCE.md) for the submission + verification process.
+- Read [docs/ADAPTERS.md](docs/ADAPTERS.md) and `adapters/reference-agent.ts` (the worked example). Four reference entrants (Node, Python stdlib, OpenAI client, LangChain) show the HTTP contract from every angle — copy the closest one.
+- If you benchmark a public agent/framework and want it on the leaderboard: the report JSON **is** the submission — `npm run submit:validate` it and PR it to `submissions/`. Process and anti-gaming rules: [docs/SUBMISSIONS.md](docs/SUBMISSIONS.md) + [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 
 ## Changing the rubric or judge
 
@@ -41,6 +40,7 @@ The rubric and judge model define the score, so changes are high-stakes:
 
 - [ ] `npm run bench:dry` passes (both tracks if you touched shared code).
 - [ ] `npm run bench:dry:all` is green (webhook, http and python entrants agree).
+- [ ] `npm run test:stage3` passes if you touched submission, verification, leaderboard, or dataset-loading code.
 - [ ] If a roadmap item changed state, `docs/ROADMAP.md` **and** the stage table in `README.md` were updated together.
 - [ ] New scenarios lint and have unambiguous ground truth.
 - [ ] No new dependencies.

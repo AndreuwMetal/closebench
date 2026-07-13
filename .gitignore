@@ -9,6 +9,11 @@ results/*
 !results/.gitkeep
 !results/EXAMPLE-*.md
 
+# Hidden split — NEVER committed: the official score runs on it, and publishing it would turn
+# generalization into memorization. Only its commitment (scenarios-hidden.sha256) is public.
+# Maintainers keep a private backup OUTSIDE any public repo; a leak forces a refresh + version bump.
+scenarios-hidden/
+
 # Local agent DB / logs
 *.db
 *.log
@@ -21,3 +26,9 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+
+# Per-domain hidden splits (Stage 4): same rule as the root one — never committed, only a commitment.
+domains/*/scenarios-hidden/
+
+# Session scratch (subagent-driven-development ledger)
+.superpowers/

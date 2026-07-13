@@ -7,32 +7,33 @@ A benchmark becomes a *referent* only if its numbers can be trusted by people wh
 - **Neutrality.** CloseBench must not advantage any model, framework, or vendor — including the agents its authors ship. The bundled reference agent is a *baseline*, never a favored entrant. Long term, decisions move to a small multi-organization group with conflict-of-interest disclosure (the MLCommons / MLPerf model).
 - **Open method, comparable numbers.** The harness, scenarios (public split), rubric, and scoring are open. A score is only meaningful with its **benchmark version**; cross-version comparisons are never made silently.
 - **Generalization, not memorization.** The official score runs on a **hidden held-out split**. The public split is for iteration and debugging.
-- **Reproducible or it doesn't count.** A leaderboard entry must be re-runnable by maintainers, not merely self-reported.
+- **Reproducible or it doesn't count.** A leaderboard entry must be re-runnable by maintainers, not merely self-reported. Mechanically: unverified entries can appear on public-split (iteration) tables but never wear a ✓, and hidden-split (official) entries don't render at all until a maintainer's seeded re-run reproduces them.
 
-## Submitting a result (Stage 3+)
+## Submitting a result
 
-A submission includes:
+The tooling is live — full referee's manual in [SUBMISSIONS.md](SUBMISSIONS.md). In short:
 
-1. **Agent** — the `SUT_CMD` and everything to run it (or a hosted endpoint), plus the exact models it uses.
-2. **Pinned config** — model ids, temperature/seed where applicable, and the CloseBench version.
-3. **Full transcripts + reports** — the generated `results/*.json` for the run.
-4. **Cost disclosure** — real \$/conversation.
+1. A submission **is** the report JSON a run emits (`{ manifiesto, resultados }`): the manifest pins the config (models, protocol, `SUT_CMD`, prompt, dataset version + digest, harness), every result carries its transcript recorded during inference, and cost comes from real tokens. Copy it to `submissions/<entrant-name>.json` and PR it.
+2. `npm run submit:validate` must pass — it rejects stripped transcripts, runs with technical errors, digest mismatches, and a declared `k` without its runs.
+3. Maintainers run `npm run verify:submission` — a **seeded** (published, auditable) ~20% subset is re-run under the pinned config; per-scenario `pass^k` + violation presence must agree ≥ 80%. Pass → a sha-bound `✓ Checked` stamp. Divergence → the entry is **held and the submitter contacted** (not silently dropped).
+4. Official scores run on the **hidden split** by maintainers (`--split hidden`); submitters iterate on the public split.
 
-Maintainers **re-run** the submission against the hidden split. A result is listed only if the re-run reproduces the claimed public-split numbers within tolerance. Divergence → the entry is held and the submitter contacted (not silently dropped).
+## Divisions
 
-## Divisions (planned)
+Borrowed from MLPerf's open/closed split, live since Stage 2 and rendered as separate tables on the board:
 
-Borrowed from MLPerf's open/closed split:
-
-- **Closed** — fixed prompt-format and tool surface, apples-to-apples across agents. The comparable number.
-- **Open** — anything goes (custom tools, retrieval, fine-tunes), to show the frontier. Reported separately.
+- **Closed** (`--protocol http`) — fixed buyer, policy and tool surface, apples-to-apples across agents. The comparable number.
+- **Open** (`--protocol webhook`) — bring your own scaffolding (custom tools, retrieval, fine-tunes), to show the frontier. Reported separately, never sorted together.
 
 ## Anti-gaming
 
-- **Hidden split** for the official score; **canary GUID** in the dataset so trainers can exclude it.
+- **Hidden split** for the official score, with a public **commitment** ([`scenarios-hidden.sha256`](../scenarios-hidden.sha256)): the digest proves the set was fixed before submissions arrived, without revealing a scenario. **Canary GUID** in the public dataset so trainers can exclude it.
 - **Versioned, occasionally refreshed** scenarios (a "Live" variant) to stay ahead of web-scale contamination.
 - **The compliance gate is not negotiable.** An agent that games close-rate by cutting ethical corners scores *worse*, not better — violations are an automatic scenario fail.
 - **The bad-prompt control** stays in CI: if a deliberately bad agent stops scoring worse, the benchmark is broken and the board is frozen until it's fixed.
+- **Against the *Leaderboard Illusion*** (privately testing N variants and publishing only the best — worth ~+50 points on Arena): **every submitted variant is published**, superseded entries stay visible, and each organization gets at most **3 entries per dataset version**. Referees cannot count anyone's *private* runs, so this cap is enforced at PR review and stated here so its limits are as public as its intent.
+- **Verification stamps are sha-bound** to the exact report bytes: edit a verified report and its ✓ downgrades to `⚠ stale` on the next `npm run leaderboard`. The binding does **not** authenticate the stamp's *origin* — there is no maintainer secret, deliberately (no key to leak, anyone can regenerate the board). Origin is guarded by process: **only maintainers write `.checked.json` files; a PR that adds or edits one is rejected on sight**, and official (hidden-split) rows don't render at all without a valid ✓. Stating the limit beats implying cryptography that isn't there.
+- **Submitter-controlled text is sanitized** before it reaches a board cell (filename, model ids): a `|`/backtick payload can't inject fabricated rows into the tables — checked in CI by `npm run test:stage3`.
 
 ## Changing the benchmark
 
@@ -43,6 +44,54 @@ Borrowed from MLPerf's open/closed split:
 ## Conflicts of interest
 
 Authors and maintainers who also submit agents disclose it. Maintainer-affiliated entries get the same hidden-split re-run as everyone else, publicly noted. The goal is simple: **no one should be able to tell, from the rules, which agent the referees built.**
+
+## Stage 4 — rounds, availability, peer review, multi-org
+
+Stage 3 answers "can this number be reproduced?" Stage 4 answers the next question a skeptic asks: "were the rules fixed *before* the numbers came in, and who's checking the referee?" The mechanisms below are graded honestly — some are live today, some are the committed design waiting on submission volume.
+
+### Versioned submission rounds
+
+The intent: a fixed calendar (e.g. quarterly) where a round's rules — dataset version + digest, `k`, judge/buyer models, that round's latency SLO — are **frozen the moment the round opens**. Every entry submitted inside the round is scored under those identical frozen rules; an entry that lands after the round closes waits for the next one rather than being graded against rules chosen after the fact.
+
+**Status: committed design, not live process.** Today, submission is continuous (open a PR whenever `submit:validate` passes) because round volume doesn't exist yet — there's no queue to protect from rule-shopping. Rounds activate once submission frequency justifies the overhead of freezing and re-opening a rule set; until then this section states the target, not the current mechanism, honestly.
+
+### Availability tags
+
+Borrowed from MLPerf: every submission declares one of
+
+- **Available** — anyone can buy or download the exact system under test today (a public API model + a public prompt/config, or an open-weights model).
+- **Preview** — will be Available within a stated window (MLPerf uses months); a submission under Preview gets **one round of grace** before it must convert to Available or drop off the headline table.
+- **RDI** (research/dev/internal) — not purchasable or downloadable by a third party. Reported for context, **never headline-ranked** — a number nobody else can reproduce by buying the same thing isn't a comparable claim.
+
+**Enforcement: process, not code.** The tag is a field the submitter declares in the PR description; there is no code that can verify a vendor's public availability. It is **checked at PR review** — a reviewer challenging a mislabeled tag is the mechanism, the same way the 3-entries-per-org cap in [Anti-gaming](#anti-gaming) is a review-time check, not a runtime one. Naming this limit beats implying an availability-verification system that doesn't exist.
+
+### Peer review & spot audit
+
+Two independent checks inside a round, so no single submitter's claim goes unexamined by anyone but the maintainer:
+
+- **Mutual peer review.** Every submitter in a round is **assigned** (not self-selected) one other submission to review — reading the manifest, transcripts, and the reasonableness of the claimed config. Assignment, not choice, is the point: letting submitters pick who reviews whom is how friendly pairs launder each other's numbers.
+- **Spot audit.** A COI-free auditor replays a seeded subset of a submission against the pinned config — the same mechanism as `verify:submission`'s seeded ~20% re-run (see [SUBMISSIONS.md](SUBMISSIONS.md)), extended to a round-level, independently-assigned auditor rather than "the maintainer."
+
+**Conflict-of-interest rules:**
+
+- You never review or audit your own organization's entry.
+- A review or audit assignment that pairs direct competitors can be **challenged once** — the challenge is heard before the round's results are published, not after.
+- All disclosures (who reviewed whom, who audited whom, any COI raised) are **listed in the round's summary**, so the assignment graph is public even though the assignment itself wasn't chosen by the parties.
+
+**Status: committed design, not live process** — same caveat as rounds. There's no peer pool to assign until there are enough submitters in a round to assign pairs meaningfully. Until then, every entry gets the Stage 3 maintainer-run `verify:submission`, which is real and live today but is a single referee, not a peer network.
+
+### Multi-org steering
+
+The end state named since Stage 0 ([Principles](#principles)): a small steering group across organizations, with conflict-of-interest disclosure, deciding scenario/rubric/judge changes and round rules — the MLCommons model. CloseBench does not have this yet; it has one author.
+
+Until the group exists, sole-maintainer authority is mitigated the way a single point of trust is mitigated anywhere reproducibility is possible: not by pretending it isn't sole authority, but by making the authority's decisions checkable.
+
+- **Everything regenerable.** The leaderboard is `npm run leaderboard` run over `submissions/` — a view, not a database anyone (including the maintainer) hand-edits. Dataset digests are recomputed from the checked-out files, not asserted.
+- **Public seeds.** `verify:submission`'s subset-selection seed is published with the verdict — a maintainer can't quietly pick a lenient subset.
+- **Sha-bound stamps.** A `.checked.json` is bound to the exact report bytes it verified ([SUBMISSIONS.md](SUBMISSIONS.md)); a maintainer editing a report after verification voids its own stamp mechanically, not by trusting the maintainer to re-verify.
+- **This document, written before disputes exist.** Freezing the anti-gaming rules and the honesty convention ("every mechanism names its enforcement or states its limit") now, while there is nothing at stake, is cheaper credibility than writing rules to fit a dispute after one happens.
+
+None of this is a substitute for the steering group — it's what makes the wait for one auditable instead of just asserted.
 
 ## Contact
 
