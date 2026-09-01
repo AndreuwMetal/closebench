@@ -32,6 +32,9 @@ jobs:
       - name: Anti-gaming selftest (validate/verify/leaderboard, informes dopados incluidos)
         run: npm run test:stage3
 
+      - name: Kappa selftest (juez↔humano, humano↔humano)
+        run: npm run kappa -- --selftest
+
       - name: Release gate self-check (--min-pass aprueba y suspende cuando debe)
         run: |
           # aprueba: subconjunto sin el escenario-trampa → 4/4 y 0 violaciones

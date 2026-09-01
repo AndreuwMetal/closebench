@@ -8,6 +8,10 @@
 results/*
 !results/.gitkeep
 !results/EXAMPLE-*.md
+# Published evidence: the runs the docs cite, so a claim can be read and not just re-run.
+# PUBLIC SPLIT ONLY — a hidden-split report carries its transcripts, and publishing those
+# would leak the very set the official score depends on. Hidden runs stay on maintainer machines.
+!results/published/
 
 # Hidden split — NEVER committed: the official score runs on it, and publishing it would turn
 # generalization into memorization. Only its commitment (scenarios-hidden.sha256) is public.

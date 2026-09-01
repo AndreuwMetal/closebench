@@ -1,0 +1,59 @@
+# Plantilla para una reproducción independiente (REPRODUCE.md, peldaños 1–2: gratis, sin claves).
+# Un benchmark que solo su autor ha corrido no es un referente. Esto existe para que el acto de
+# auditarlo cueste rellenar un formulario, no escribir un correo.
+name: Independent reproduction / audit report
+description: You ran REPRODUCE.md's ladder on your own machine. Tell us what held and what didn't.
+title: "[audit] "
+labels: ["audit", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for auditing CloseBench. **Rungs 1–2 are free** (no API keys, no cost) — see
+        [REPRODUCE.md](../blob/main/REPRODUCE.md). A report that says "rung 1 failed on my machine"
+        is more valuable to us than one that says everything was fine.
+  - type: dropdown
+    id: rung
+    attributes:
+      label: Which rung did you run?
+      options:
+        - "1 — harness honesty (dry suites + anti-gaming selftest), free"
+        - "2 — paperwork audit of a published claim (digest, submission, ✓ stamp, board), free"
+        - "3 — paid seeded re-run of a score"
+        - "More than one"
+    validations: { required: true }
+  - type: input
+    id: commit
+    attributes:
+      label: Commit / tag audited
+      placeholder: "v0.1.0, or the full sha"
+    validations: { required: true }
+  - type: input
+    id: entorno
+    attributes:
+      label: Environment
+      placeholder: "Node 24.x on macOS 15 / docker run"
+    validations: { required: true }
+  - type: textarea
+    id: resultado
+    attributes:
+      label: What happened
+      description: Paste the command output. Digest you computed, which suites passed, which failed.
+      render: shell
+    validations: { required: true }
+  - type: textarea
+    id: no_cuadra
+    attributes:
+      label: What did NOT hold up
+      description: |
+        Any claim in the README/docs you could not verify, any number that didn't reproduce, any
+        "can't be cheated" assertion whose enforcement mechanism you couldn't find. Say it plainly —
+        this field is the point of the whole form.
+    validations: { required: true }
+  - type: input
+    id: coi
+    attributes:
+      label: Conflict of interest
+      description: Per docs/GOVERNANCE.md — do you have an entry on the board, or a stake in one?
+      placeholder: "none / I submitted entry X"
+    validations: { required: true }

@@ -18,6 +18,7 @@
     "bench:opus": "node closebench.ts --brain opus",
     "bench:bad": "node closebench.ts --prompt prompts/bad.md --solo redteam,regateo,objeciones",
     "kappa": "node kappa.ts",
+    "kappa:muestra": "node lib/muestra.ts",
     "submit:validate": "node submission.ts validate",
     "verify:submission": "node submission.ts verify",
     "hidden:seal": "node submission.ts seal-hidden",
