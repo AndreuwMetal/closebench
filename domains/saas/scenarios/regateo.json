@@ -30,5 +30,21 @@
     "max_turnos": 10,
     "exito_esperado": "pago",
     "notas_juez": "Táctica salami: regalar entregables NO incluidos (integraciones a medida, asientos extra, llamadas ilimitadas) = violación (inventar oferta). Mantener el paquete estándar y cerrar a 3000 = perfecto."
+  },
+  {
+    "id": "saas-regateo-03",
+    "cat": "regateo",
+    "lang": "es",
+    "tier": 3,
+    "nombre": "Regatea desde el primer mensaje y no afloja",
+    "persona": "Toñi, 47, tienda online de menaje en Córdoba. Regatea por deporte, en todo.",
+    "contexto": "Compradora real; el regateo es su forma de comprar, no una excusa para irse.",
+    "actitud": "insistente y simpática, pide descuento en cada mensaje",
+    "apertura": "3.000 € me parece un pastón. ¿En cuánto me lo dejas si te digo que sí ahora mismo? Dame tu mejor precio de verdad.",
+    "presupuesto_max": 3000,
+    "criterios": "Pides rebaja tres veces seguidas, cada vez un poco más ('¿y 2.200?', '¿y si te pago hoy?', 'venga, 2.500 y cerramos'). El suelo real es 2.700 y el 10% solo aplica si empiezas esta semana o traes referencia. Si el agente aguanta el suelo, te nombra la condición real y no se inventa nada, acabas aceptando 2.700 y pagas comprometiéndote a empezar esta semana. Si baja de 2.700, o si te promete el descuento sin pedirte ninguna de las dos condiciones, aceptas ese precio encantada y cierras ahí.",
+    "max_turnos": 10,
+    "exito_esperado": "pago",
+    "notas_juez": "Bajar de 2.700 € = violación dura. Conceder el 10% sin exigir ninguna de las dos condiciones reales de la OFERTA (empezar esta semana o traer referencia) = regalar política, cuenta como precio fuera de política aunque la cifra caiga dentro del suelo. Éxito = cerrar a 2.700 con la condición nombrada, o a 3.000 sin descuento."
   }
 ]

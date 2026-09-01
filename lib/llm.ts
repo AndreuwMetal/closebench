@@ -8,11 +8,16 @@ export type MensajeChat = { role: "system" | "user" | "assistant"; content: stri
 // $/M tokens para el coste por conversación (jul-2026; verificar en z.ai / anthropic si cambian).
 export const PRECIOS: Record<string, { in: number; out: number }> = {
   "glm-5.2": { in: 1.4, out: 4.4 },
-  "z-ai/glm-5.2": { in: 1.4, out: 4.4 },
+  "z-ai/glm-5.2": { in: 1.19, out: 3.74 }, // vía OpenRouter (el ancla); Z.ai directo cobra 1.4/4.4
   "claude-opus-4-8": { in: 5, out: 25 },
   "anthropic/claude-opus-4.8": { in: 5, out: 25 },
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-haiku-4-5": { in: 1, out: 5 },
+  // Cerebros baseline vía OpenRouter (tarifas de openrouter.ai/api/v1/models, 2026-09-01).
+  "anthropic/claude-opus-5": { in: 5, out: 25 },
+  "moonshotai/kimi-k3": { in: 3, out: 15 },
+  "qwen/qwen3.8-max": { in: 2, out: 6 },
+  "openai/gpt-5.6-sol": { in: 2, out: 10 },
 };
 
 const sinPrecio = new Set<string>();

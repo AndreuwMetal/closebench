@@ -57,8 +57,13 @@ const MODELO_COMPRADOR = process.env.BUYER_MODEL || "claude-sonnet-5";
 const MODELO_JUEZ = process.env.JUDGE_MODEL || "claude-opus-4-8";
 // burbujas de un turno llegan seguidas; este silencio marca el fin. El dry usaba 800 ms y flaqueaba
 // esporádicamente bajo concurrencia (dry-handoff perdía la despedida): 1200 ms lo cubre y sigue rápido.
-const QUIET_MS = DRY ? 1200 : 2500;
-const TURNO_TIMEOUT_MS = DRY ? 15_000 : 120_000;
+// Ambos son ventanas de reloj, y una ventana de reloj afinada en una máquina falla en otra: el dry
+// se puso rojo en CI dos veces (dry-demo perdía el enlace porque el runner cerró el turno antes de
+// que llegara la burbuja) y dos conversaciones de saas murieron por turno agotado con el cerebro
+// lento. Por eso son env, no constantes: un runner lento sube QUIET_MS, un cerebro lento sube el
+// timeout, y nadie tiene que tocar el código para que su máquina deje de mentir.
+const QUIET_MS = Number(process.env.QUIET_MS) || (DRY ? 1200 : 2500);
+const TURNO_TIMEOUT_MS = Number(process.env.TURNO_TIMEOUT_MS) || (DRY ? 15_000 : 180_000);
 const RAIZ = import.meta.dirname;
 const CAL_LINK = "https://cal.mock/forja/demo"; // el mismo para el agente (env) y para las tools del harness
 
@@ -298,11 +303,13 @@ async function main() {
   let cerebro: { base: string; key: string; modelo: string; nombre: string };
   const mocks = await arrancarMocks(precioLista); // el cerebro dry cobra el precio de lista DEL DOMINIO
   if (DRY) cerebro = { base: `http://127.0.0.1:${mocks.port}/llm`, key: "dry", modelo: "glm-5.2", nombre: "guion-dry" };
-  else if (args.brain === "opus") {
+  else if (args.brain === "opus" || args.brain!.includes("/")) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) { console.error("Falta OPENROUTER_API_KEY en .env (cerebro rival)"); process.exit(1); }
-    // slug OpenRouter propio (NO RIVAL_MODEL: ese ya es el id nativo del rival de bench:publicos)
-    const slug = process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-4.8";
+    // Cualquier slug OpenRouter vale como cerebro: `--brain moonshotai/kimi-k3`. El alias "opus" se
+    // queda por compatibilidad con npm run bench:opus. (NO RIVAL_MODEL: ese ya es el id nativo del
+    // rival de bench:publicos.) Un slug sin tarifa en PRECIOS avisa y reporta coste 0: añádela.
+    const slug = args.brain!.includes("/") ? args.brain! : (process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-5");
     cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: slug };
   } else {
     const key = process.env.ZAI_API_KEY;
@@ -489,7 +496,7 @@ async function main() {
     harness: { git: gitSha, node: process.version },
   };
 
-  const nombreBase = `closebench-${DRY ? "dry" : args.brain}-${marca}`;
+  const nombreBase = `closebench-${DRY ? "dry" : args.brain!.replace(/[^a-zA-Z0-9.-]/g, "-")}-${marca}`; // el slug lleva "/": no es un nombre de fichero
   // Una conversación que murió por un error técnico NO se juzgó: no tiene violaciones porque nadie miró,
   // no porque el agente se portara bien. Un run con errores no es un score; decir "Violaciones: 0 ✅" ahí
   // regala el gate de cumplimiento a un agente que simplemente reventó.
