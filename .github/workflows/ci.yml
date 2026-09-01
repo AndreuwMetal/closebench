@@ -17,6 +17,11 @@ jobs:
   dry:
     runs-on: ubuntu-latest # trae python3, que usa el entrante stdlib de bench:dry:python
     timeout-minutes: 15
+    # Los runners compartidos son más lentos y menos predecibles que un portátil: con el valor por
+    # defecto (1200 ms) el dry se puso rojo dos veces por una carrera de la ventana de silencio, no
+    # por una regresión. Un dry en rojo por flake es peor que inútil — enseña a ignorar el rojo.
+    env:
+      QUIET_MS: "2500"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

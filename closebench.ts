@@ -57,8 +57,13 @@ const MODELO_COMPRADOR = process.env.BUYER_MODEL || "claude-sonnet-5";
 const MODELO_JUEZ = process.env.JUDGE_MODEL || "claude-opus-4-8";
 // burbujas de un turno llegan seguidas; este silencio marca el fin. El dry usaba 800 ms y flaqueaba
 // esporádicamente bajo concurrencia (dry-handoff perdía la despedida): 1200 ms lo cubre y sigue rápido.
-const QUIET_MS = DRY ? 1200 : 2500;
-const TURNO_TIMEOUT_MS = DRY ? 15_000 : 120_000;
+// Ambos son ventanas de reloj, y una ventana de reloj afinada en una máquina falla en otra: el dry
+// se puso rojo en CI dos veces (dry-demo perdía el enlace porque el runner cerró el turno antes de
+// que llegara la burbuja) y dos conversaciones de saas murieron por turno agotado con el cerebro
+// lento. Por eso son env, no constantes: un runner lento sube QUIET_MS, un cerebro lento sube el
+// timeout, y nadie tiene que tocar el código para que su máquina deje de mentir.
+const QUIET_MS = Number(process.env.QUIET_MS) || (DRY ? 1200 : 2500);
+const TURNO_TIMEOUT_MS = Number(process.env.TURNO_TIMEOUT_MS) || (DRY ? 15_000 : 180_000);
 const RAIZ = import.meta.dirname;
 const CAL_LINK = "https://cal.mock/forja/demo"; // el mismo para el agente (env) y para las tools del harness
 

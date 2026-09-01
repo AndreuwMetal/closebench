@@ -55,14 +55,14 @@ Authors and maintainers who also submit agents disclose it. Maintainer-affiliate
 
 | Baseline | Model id (pinned) | Why it's on the board |
 |---|---|---|
-| reference-GLM | `glm-5.2` (Z.ai direct) | The bundled default and the **anchor** — see below. |
+| reference-GLM | `z-ai/glm-5.2` (OpenRouter) | The **anchor** — see below. Routed through OpenRouter like the other five, deliberately: the anchor's whole job is to tell dataset drift apart from everything else, and an anchor on its own provider path confounds the two the moment that provider changes what it serves. The bundled default still runs Z.ai direct (`--brain glm`); the anchor is `--brain z-ai/glm-5.2`. Runs before 2026-09-01 went through Z.ai direct, so the anchor's series has a route change at that date and it is recorded rather than smoothed over. |
 | Opus | `anthropic/claude-opus-5` | Frontier ceiling. **Caveat, stated because it is the one row where the rule bends:** the judge is `claude-opus-4-8`, so this baseline is the only one whose brain shares a vendor and family with its judge. Judge and brain are still different models, but self-preference cannot be ruled out by construction the way it can for the other four — so the row carries the note, and a κ round that covers it is worth more here than anywhere else. |
 | Kimi | `moonshotai/kimi-k3` | |
 | Qwen | `qwen/qwen3.8-max` | |
 | GPT-5.6 Sol | `openai/gpt-5.6-sol` | |
 | **`bad.md` floor** | `glm-5.2` with `prompts/bad.md` | **Published as a baseline, not hidden as a test fixture.** Without a floor, a reader has no idea whether 79% is good. It is also the discrimination control, so publishing it makes the board self-checking: the day an entrant scores below the deliberately bad prompt, something is wrong with the entrant or with the set. |
 
-Everything but the first runs through OpenRouter (`--brain <slug>`; any OpenRouter slug works, and a slug with no entry in `PRECIOS` warns and reports a cost of 0 instead of inventing one).
+All six run through OpenRouter (`--brain <slug>`; any OpenRouter slug works, and a slug with no entry in `PRECIOS` warns and reports a cost of 0 instead of inventing one).
 
 **k = 8.** Not a taste call. At n = 52 and p ≈ 0.79 the binomial standard error is ~5.6 points, so a 95% interval is roughly ±11 points: **two agents within about six scenarios of each other are indistinguishable at k = 1.** That is not a hypothetical — the first `saas` control produced 15/20 against 14/20 and the honest reading was "no difference". Every baseline publishes **pass^1 and pass^8**: pass^1 is capability, pass^8 is reliability, and the distance between them is the most informative number a sales agent has.
 
@@ -73,6 +73,23 @@ Everything but the first runs through OpenRouter (`--brain <slug>`; any OpenRout
 **Cost, stated so the policy is honest about its own limits.** Evaluation costs about $0.046 per conversation regardless of brain (buyer + judge), and the brain adds its own. At k = 8 over 52 scenarios that is roughly $28 (GLM) to $54 (Opus) per baseline, about **$218 for the five plus the published `bad.md` floor**. A policy that ignored this would quietly become "whatever the maintainer could afford that month".
 
 **Conflict of interest, applied to the first real case.** CloseForge is the maintainer's product and will be an entrant. Per [Conflicts of interest](#conflicts-of-interest), a maintainer-affiliated entry is disclosed on the board and does not appear as verified without an independent re-run. The baselines above are *brains behind the bundled reference agent*, not maintainer products, and are labeled as maintainer-run.
+
+## Hidden split: size and refresh
+
+*Decided 2026-09-01. Before this, `scenarios-hidden/` had a sealed commitment and no stated policy for how big it should be or when it changes — which meant the honest answer to "could you quietly swap it after seeing submissions?" was a promise rather than a rule.*
+
+**Size: 20 scenarios per domain is the floor for an official score, 30 the target.** This is arithmetic, not taste. At p ≈ 0.75 the 95% interval on a hidden score is about **±27 points at n = 10**, ±19 at n = 20, ±15 at n = 30. A ten-scenario hidden set cannot separate two agents from each other; it can only catch an agent that is outright broken. Today **realestate's hidden split is 10 and saas has none**, so both are below the floor and neither yet backs an official score — stated here rather than discovered later by someone doing the arithmetic themselves.
+
+**Every hidden score is published with its interval.** A bare hidden number, or a rank derived from one, is not a claim this benchmark makes at these sample sizes.
+
+**Refresh has exactly two triggers:**
+
+1. **A leak — immediate and mandatory.** Any evidence the set (or part of it) became public: refresh the affected scenarios, re-seal, bump the domain version. Every score on the leaked set is archived, not silently carried forward. This is the case the sealed commitment exists for.
+2. **Rotation between submission rounds — one third.** At each round, roughly a third of the hidden set is replaced. Memorisation from previous rounds decays, while two thirds carry over so scores across adjacent rounds stay broadly comparable. A full replacement every round would make the board a series of unrelated exams.
+
+**Retired hidden scenarios go public.** A scenario rotated out is folded into the public set at the next version bump instead of being deleted. It has done its job as a held-out probe and becomes debug material everyone can see — and the public set grows without anyone writing new scenarios for it.
+
+**No silent edits, ever.** Any change to a hidden set re-seals `scenarios-hidden.sha256` with a new digest, count and date. The previous commitment stays in git history, so the timeline of every change is public even though its contents never are. And hidden-split *reports* are never published — a transcript is the scenario ([`results/published/README.md`](../results/published/README.md)).
 
 ## Stage 4 — rounds, availability, peer review, multi-org
 
