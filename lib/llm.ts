@@ -14,6 +14,7 @@ export const PRECIOS: Record<string, { in: number; out: number }> = {
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-haiku-4-5": { in: 1, out: 5 },
   // Cerebros baseline vía OpenRouter (tarifas de openrouter.ai/api/v1/models, 2026-09-01).
+  "anthropic/claude-opus-5": { in: 5, out: 25 },
   "moonshotai/kimi-k3": { in: 3, out: 15 },
   "qwen/qwen3.8-max": { in: 2, out: 6 },
   "openai/gpt-5.6-sol": { in: 2, out: 10 },

@@ -304,7 +304,7 @@ async function main() {
     // Cualquier slug OpenRouter vale como cerebro: `--brain moonshotai/kimi-k3`. El alias "opus" se
     // queda por compatibilidad con npm run bench:opus. (NO RIVAL_MODEL: ese ya es el id nativo del
     // rival de bench:publicos.) Un slug sin tarifa en PRECIOS avisa y reporta coste 0: añádela.
-    const slug = args.brain!.includes("/") ? args.brain! : (process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-4.8");
+    const slug = args.brain!.includes("/") ? args.brain! : (process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-5");
     cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: slug };
   } else {
     const key = process.env.ZAI_API_KEY;

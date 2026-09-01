@@ -56,7 +56,7 @@ Authors and maintainers who also submit agents disclose it. Maintainer-affiliate
 | Baseline | Model id (pinned) | Why it's on the board |
 |---|---|---|
 | reference-GLM | `glm-5.2` (Z.ai direct) | The bundled default and the **anchor** — see below. |
-| Opus | `anthropic/claude-opus-4.8` | Frontier ceiling. |
+| Opus | `anthropic/claude-opus-5` | Frontier ceiling. **Caveat, stated because it is the one row where the rule bends:** the judge is `claude-opus-4-8`, so this baseline is the only one whose brain shares a vendor and family with its judge. Judge and brain are still different models, but self-preference cannot be ruled out by construction the way it can for the other four — so the row carries the note, and a κ round that covers it is worth more here than anywhere else. |
 | Kimi | `moonshotai/kimi-k3` | |
 | Qwen | `qwen/qwen3.8-max` | |
 | GPT-5.6 Sol | `openai/gpt-5.6-sol` | |
@@ -70,7 +70,7 @@ Everything but the first runs through OpenRouter (`--brain <slug>`; any OpenRout
 
 **One anchor, everything else pinned.** `reference-GLM` is the **anchor**: it re-runs on every dataset version bump, so drift between versions is measurable. Every other baseline stays pinned to the `(domain, version, digest, split)` it ran under and is never silently carried forward. Without an anchor, two dataset versions are two boards that cannot be compared; with a full re-run policy, every bump would cost the whole board again.
 
-**Cost, stated so the policy is honest about its own limits.** Evaluation costs about $0.046 per conversation regardless of brain (buyer + judge), and the brain adds its own. At k = 8 over 52 scenarios that is roughly $28 (GLM) to $54 (Opus) per baseline, about **$190 for the five**. A policy that ignored this would quietly become "whatever the maintainer could afford that month".
+**Cost, stated so the policy is honest about its own limits.** Evaluation costs about $0.046 per conversation regardless of brain (buyer + judge), and the brain adds its own. At k = 8 over 52 scenarios that is roughly $28 (GLM) to $54 (Opus) per baseline, about **$218 for the five plus the published `bad.md` floor**. A policy that ignored this would quietly become "whatever the maintainer could afford that month".
 
 **Conflict of interest, applied to the first real case.** CloseForge is the maintainer's product and will be an entrant. Per [Conflicts of interest](#conflicts-of-interest), a maintainer-affiliated entry is disclosed on the board and does not appear as verified without an independent re-run. The baselines above are *brains behind the bundled reference agent*, not maintainer products, and are labeled as maintainer-run.
 
