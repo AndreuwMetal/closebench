@@ -45,6 +45,35 @@ Borrowed from MLPerf's open/closed split, live since Stage 2 and rendered as sep
 
 Authors and maintainers who also submit agents disclose it. Maintainer-affiliated entries get the same hidden-split re-run as everyone else, publicly noted. The goal is simple: **no one should be able to tell, from the rules, which agent the referees built.**
 
+## Baseline policy
+
+*Decided 2026-09-01. This is the policy that unblocks the first board entries; before it existed, "which brains get a published number" was an open question and no baseline could be authoritative.*
+
+**Seed, then step back.** CloseBench publishes a small set of maintainer-run baselines so the board is legible on day one, and then it is the community's. This is SWE-bench's and τ-bench's shape, not HELM's: the project is not a measurement house and will not try to keep a systematic sweep of every model current. It is also not MLPerf's pure-submission model, which is correct for a consortium and fatal for a board nobody has submitted to yet.
+
+**The seeded baselines.** Five brains behind the *same* bundled reference agent, so the row compares brains and not scaffolding:
+
+| Baseline | Model id (pinned) | Why it's on the board |
+|---|---|---|
+| reference-GLM | `glm-5.2` (Z.ai direct) | The bundled default and the **anchor** — see below. |
+| Opus | `anthropic/claude-opus-4.8` | Frontier ceiling. |
+| Kimi | `moonshotai/kimi-k3` | |
+| Qwen | `qwen/qwen3.8-max` | |
+| GPT-5.6 Sol | `openai/gpt-5.6-sol` | |
+| **`bad.md` floor** | `glm-5.2` with `prompts/bad.md` | **Published as a baseline, not hidden as a test fixture.** Without a floor, a reader has no idea whether 79% is good. It is also the discrimination control, so publishing it makes the board self-checking: the day an entrant scores below the deliberately bad prompt, something is wrong with the entrant or with the set. |
+
+Everything but the first runs through OpenRouter (`--brain <slug>`; any OpenRouter slug works, and a slug with no entry in `PRECIOS` warns and reports a cost of 0 instead of inventing one).
+
+**k = 8.** Not a taste call. At n = 52 and p ≈ 0.79 the binomial standard error is ~5.6 points, so a 95% interval is roughly ±11 points: **two agents within about six scenarios of each other are indistinguishable at k = 1.** That is not a hypothetical — the first `saas` control produced 15/20 against 14/20 and the honest reading was "no difference". Every baseline publishes **pass^1 and pass^8**: pass^1 is capability, pass^8 is reliability, and the distance between them is the most informative number a sales agent has.
+
+**Model ids are pinned with a date.** A provider can change what an endpoint serves without changing its name. A model update is a **new entry**, never a silently updated one.
+
+**One anchor, everything else pinned.** `reference-GLM` is the **anchor**: it re-runs on every dataset version bump, so drift between versions is measurable. Every other baseline stays pinned to the `(domain, version, digest, split)` it ran under and is never silently carried forward. Without an anchor, two dataset versions are two boards that cannot be compared; with a full re-run policy, every bump would cost the whole board again.
+
+**Cost, stated so the policy is honest about its own limits.** Evaluation costs about $0.046 per conversation regardless of brain (buyer + judge), and the brain adds its own. At k = 8 over 52 scenarios that is roughly $28 (GLM) to $54 (Opus) per baseline, about **$190 for the five**. A policy that ignored this would quietly become "whatever the maintainer could afford that month".
+
+**Conflict of interest, applied to the first real case.** CloseForge is the maintainer's product and will be an entrant. Per [Conflicts of interest](#conflicts-of-interest), a maintainer-affiliated entry is disclosed on the board and does not appear as verified without an independent re-run. The baselines above are *brains behind the bundled reference agent*, not maintainer products, and are labeled as maintainer-run.
+
 ## Stage 4 — rounds, availability, peer review, multi-org
 
 Stage 3 answers "can this number be reproduced?" Stage 4 answers the next question a skeptic asks: "were the rules fixed *before* the numbers came in, and who's checking the referee?" The mechanisms below are graded honestly — some are live today, some are the committed design waiting on submission volume.

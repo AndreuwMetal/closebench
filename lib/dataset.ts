@@ -14,7 +14,7 @@ export const RAIZ = join(import.meta.dirname, "..");
 // validar contra un juez real ni split oculto (docs/DOMAINS.md).
 export const DOMINIOS: Record<string, { version: string; estado: "official" | "preview" }> = {
   realestate: { version: DATASET_VERSION, estado: "official" },
-  saas: { version: "0.1", estado: "preview" },
+  saas: { version: "0.2", estado: "preview" },
 };
 export const DOMINIO_DEFECTO = "realestate";
 

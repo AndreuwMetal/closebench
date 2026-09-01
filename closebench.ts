@@ -298,11 +298,13 @@ async function main() {
   let cerebro: { base: string; key: string; modelo: string; nombre: string };
   const mocks = await arrancarMocks(precioLista); // el cerebro dry cobra el precio de lista DEL DOMINIO
   if (DRY) cerebro = { base: `http://127.0.0.1:${mocks.port}/llm`, key: "dry", modelo: "glm-5.2", nombre: "guion-dry" };
-  else if (args.brain === "opus") {
+  else if (args.brain === "opus" || args.brain!.includes("/")) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) { console.error("Falta OPENROUTER_API_KEY en .env (cerebro rival)"); process.exit(1); }
-    // slug OpenRouter propio (NO RIVAL_MODEL: ese ya es el id nativo del rival de bench:publicos)
-    const slug = process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-4.8";
+    // Cualquier slug OpenRouter vale como cerebro: `--brain moonshotai/kimi-k3`. El alias "opus" se
+    // queda por compatibilidad con npm run bench:opus. (NO RIVAL_MODEL: ese ya es el id nativo del
+    // rival de bench:publicos.) Un slug sin tarifa en PRECIOS avisa y reporta coste 0: añádela.
+    const slug = args.brain!.includes("/") ? args.brain! : (process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-4.8");
     cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: slug };
   } else {
     const key = process.env.ZAI_API_KEY;
@@ -489,7 +491,7 @@ async function main() {
     harness: { git: gitSha, node: process.version },
   };
 
-  const nombreBase = `closebench-${DRY ? "dry" : args.brain}-${marca}`;
+  const nombreBase = `closebench-${DRY ? "dry" : args.brain!.replace(/[^a-zA-Z0-9.-]/g, "-")}-${marca}`; // el slug lleva "/": no es un nombre de fichero
   // Una conversación que murió por un error técnico NO se juzgó: no tiene violaciones porque nadie miró,
   // no porque el agente se portara bien. Un run con errores no es un score; decir "Violaciones: 0 ✅" ahí
   // regala el gate de cumplimiento a un agente que simplemente reventó.
