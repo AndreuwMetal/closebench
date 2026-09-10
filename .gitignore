@@ -17,6 +17,7 @@ results/*
 # generalization into memorization. Only its commitment (scenarios-hidden.sha256) is public.
 # Maintainers keep a private backup OUTSIDE any public repo; a leak forces a refresh + version bump.
 scenarios-hidden/
+_backups-scenarios/
 
 # Local agent DB / logs
 *.db
