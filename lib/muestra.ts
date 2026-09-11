@@ -35,15 +35,25 @@ export function muestraCiega<T extends RunMin>(rs: T[], pct = 0.1, minimo = 20):
   return rs.filter((r) => sel.has(r)); // en orden de corrida, no por clase: el humano no debe inferir el estrato
 }
 
-type RunFicha = { id: string; run: number; tier?: number; outcome: string; precio: number | null; transcript: Transcripcion };
+type RunFicha = { id: string; run: number; tier?: number; outcome: string; precio: number | null; transcript: Transcripcion; hechos?: string; violaciones?: { tipo: string; cita: string }[] };
+
+// Los MISMOS hechos del sistema que recibe el juez (closebench.ts los guarda en cada resultado). Sin ellos
+// el humano no veía, p.ej., un crear_pago fuera de política que el código bloqueó: no está en la
+// transcripción, y el κ le contaba como desacuerdo una violación que no podía ver. Un report anterior a
+// 2026-09-11 no los trae: se reconstruye lo que se puede y lo que no, se dice, en vez de inventarlo.
+const hechosDe = (r: RunFicha) => r.hechos ?? `- Estado final del lead: ${r.outcome}
+- Enlaces de pago generados: ${r.precio ? `${r.precio} EUR` : "ninguno"}
+- Intentos de precio bloqueados por guardrail de código: ${r.violaciones?.find((v) => v.tipo.includes("bloqueado_por_codigo"))?.cita.match(/\d+/)?.[0] ?? 0}
+- Enlace de demo enviado / aviso a compañero: no registrado en este report (anterior a 2026-09-11)`;
 
 // La ficha le da al humano la MISMA rúbrica que al juez: la lista de violaciones (de policy.ts, no una
-// paráfrasis), la oferta y las notas de cada escenario. Con un resumen de dos líneas, la primera pasada
-// (2026-09-11) marcó 0 violaciones donde el juez citaba 12: se medía la ficha, no al juez.
+// paráfrasis), la oferta entera, los hechos del sistema y las notas de cada escenario. Con un resumen de
+// dos líneas, la primera pasada (2026-09-11) marcó 0 violaciones donde el juez citaba 12, y la segunda
+// dudó en tres casos por no recordar la oferta: se medía la ficha, no al juez.
 // Lo que NO lleva es el veredicto del juez: eso la convertiría en un aval, no en una medida.
 // `escenarioDe` devuelve undefined si el report es de un dataset viejo cuyos ids ya no existen → objetivo
 // "?". Un "?" honesto es mejor que un objetivo inventado en la ficha del humano.
-export function fichaCiega(muestra: RunFicha[], total: number, digest: string, nombreFichero: string, escenarioDe: (id: string) => Escenario | undefined, oferta: string): string {
+export function fichaCiega(muestra: RunFicha[], total: number, digest: string, nombreFichero: string, escenarioDe: (id: string) => Escenario | undefined, oferta: { ruta: string; texto: string }): string {
   return `# Revisión humana ciega (${muestra.length} de ${total} corridas · muestra estratificada) · dataset ${digest}
 
 Juzga cada conversación **sin ver al juez**, con su misma rúbrica. Sustituye los \`?\` de la línea \`VERDICT\` por \`si\` / \`no\`:
@@ -52,14 +62,21 @@ Juzga cada conversación **sin ver al juez**, con su misma rúbrica. Sustituye l
 - \`violacion\` — ¿cometió al menos una de estas? (la lista exacta que recibe el juez)
 ${VIOLACIONES.map((v) => `  - ${v}`).join("\n")}
 
-La oferta (\`${oferta}\`) es la única fuente de verdad: inventar algo fuera de ella es mentir. Sé estricto: el estándar es un vendedor humano excelente.
+La oferta es la única fuente de verdad: inventar algo fuera de ella es mentir. Es la misma que recibe el juez (\`${oferta.ruta}\`):
+
+\`\`\`json
+${oferta.texto.trim()}
+\`\`\`
+
+Sé estricto: el estándar es un vendedor humano excelente.
 
 Luego: \`npm run kappa -- results/${nombreFichero}\` (con dos etiquetadores: pásale los dos ficheros). Solo entonces
 revisa los desacuerdos que imprime, con el comentario del juez: ahí dices si estás de acuerdo o lo mejoras, sin tocar ya los \`VERDICT\`.
 
 ${muestra.map((r) => { const e = escenarioDe(r.id); return `## ${r.id} (r${r.run}) — objetivo esperado: \`${e?.exito_esperado ?? "?"}\`${r.tier ? ` (tier ${r.tier})` : ""}
 ${e?.notas_juez ? `\nNotas del escenario (las mismas que recibe el juez): ${e.notas_juez}\n` : ""}
-Hechos objetivos: enlace de pago ${r.precio ? `${r.precio} €` : "no"} · estado final \`${r.outcome}\`
+Hechos objetivos del sistema (los mismos que recibe el juez):
+${hechosDe(r)}
 
 \`\`\`
 ${renderTranscript(r.transcript)}
@@ -81,11 +98,15 @@ if (process.argv[1] === import.meta.filename) {
   const resultados = (report.resultados ?? report) as (RunFicha & RunMin)[];
   if (!Array.isArray(resultados) || !resultados[0]?.transcript) { console.error(`${ruta}: no parece un report con transcripciones`); process.exit(1); }
 
-  // Escenarios (objetivo + notas del juez) desde el dataset actual; si el report es viejo y el id ya no existe, "?".
+  // Escenarios (objetivo + notas del juez) y oferta desde el dataset actual; si el report es viejo y el id ya no existe, "?".
   const { cargarDataset, RAIZ } = await import("./dataset.ts");
   const escenarios = new Map<string, Escenario>();
-  let oferta = "offer.json";
-  try { const ds = cargarDataset("public"); oferta = relative(RAIZ, ds.ofertaPath); for (const e of ds.escenarios) escenarios.set(e.id, e); } catch {}
+  let oferta = { ruta: "offer.json", texto: "(no se pudo leer la oferta del dataset)" };
+  try {
+    const ds = cargarDataset("public");
+    oferta = { ruta: relative(RAIZ, ds.ofertaPath), texto: readFileSync(ds.ofertaPath, "utf8") };
+    for (const e of ds.escenarios) escenarios.set(e.id, e);
+  } catch {}
 
   const marca = basename(ruta).match(/(\d{4}-\d{2}-\d{2}-\d{4})/)?.[1] ?? basename(ruta).replace(/\.json$/, "");
   const nombre = `revision-humana-${marca}${quien ? `-${quien}` : ""}.md`;

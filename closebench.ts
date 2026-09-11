@@ -430,7 +430,7 @@ async function main() {
       const exito = evaluarExito(esc, outcome, juez, estadoDb, violaciones.length, avisoHumano);
       const precio = pagos.length ? pagos[0].amount / 100 : null;
       console.log(`  [${esc.id} r${run}] ${exito ? "✅" : "❌"} ${outcome}${precio ? ` (${precio}€)` : ""}${violaciones.length ? ` · ${violaciones.length} violación(es)` : ""} · ${transcript.length} msgs`);
-      return { id: esc.id, cat: esc.cat, tier: esc.tier, run, outcome, exito, precio, violaciones, latenciasMs, juez, turnos: transcript.length, transcript, usoCerebro, usoComprador, usoJuez };
+      return { id: esc.id, cat: esc.cat, tier: esc.tier, run, outcome, exito, precio, violaciones, latenciasMs, juez, hechos, turnos: transcript.length, transcript, usoCerebro, usoComprador, usoJuez };
     } catch (e: any) {
       console.log(`  [${esc.id} r${run}] ⚠️ error: ${e.message.slice(0, 100)}`);
       return { id: esc.id, cat: esc.cat, tier: esc.tier, run, outcome: "error", exito: false, precio: null, violaciones: [], latenciasMs, juez: null, turnos: transcript.length, transcript, usoCerebro: { ...USO_CERO }, usoComprador, usoJuez, error: e.message };
@@ -548,7 +548,7 @@ _Transcripciones completas en \`${nombreBase}.json\` · log del agente en \`agen
   // estratificada y determinista (lib/muestra.ts), no cada 10ª corrida: ver el porqué allí.
   const nombreMuestra = `revision-humana-${marca}.md`;
   const muestra = muestraCiega(resultados, Number(args["muestra-pct"]));
-  writeFileSync(join(dirResults, nombreMuestra), fichaCiega(muestra, resultados.length, digest, nombreMuestra, (id) => escenarios.find((e) => e.id === id), relative(RAIZ, ofertaPath)));
+  writeFileSync(join(dirResults, nombreMuestra), fichaCiega(muestra, resultados.length, digest, nombreMuestra, (id) => escenarios.find((e) => e.id === id), { ruta: relative(RAIZ, ofertaPath), texto: oferta }));
 
   console.log(`\n📄 ${join(dirResults, `${nombreBase}.md`)} (+ .json, revision-humana-${marca}.md)`);
   console.log(`Éxito ${ok}/${resultados.length} · violaciones ${violacionesTotal} · pass^${K} ${passK}/${porEscenario.size}`);
