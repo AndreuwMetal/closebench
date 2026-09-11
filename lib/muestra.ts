@@ -7,7 +7,9 @@
 //
 // Uso CLI:  node lib/muestra.ts results/closebench-glm-2026-07-08-2019.json [--pct 0.3] [--quien ana]
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
+import { VIOLACIONES } from "./policy.ts";
+import type { Escenario } from "./dataset.ts";
 
 export type Transcripcion = { quien: "lead" | "agente"; texto: string }[];
 export const renderTranscript = (t: Transcripcion) =>
@@ -35,21 +37,28 @@ export function muestraCiega<T extends RunMin>(rs: T[], pct = 0.1, minimo = 20):
 
 type RunFicha = { id: string; run: number; tier?: number; outcome: string; precio: number | null; transcript: Transcripcion };
 
-// `objetivoDe` devuelve el `exito_esperado` del escenario; "?" si el report es de un dataset viejo
-// cuyos ids ya no existen. Un "?" honesto es mejor que un objetivo inventado en la ficha del humano.
-export function fichaCiega(muestra: RunFicha[], total: number, digest: string, nombreFichero: string, objetivoDe: (id: string) => string): string {
+// La ficha le da al humano la MISMA rúbrica que al juez: la lista de violaciones (de policy.ts, no una
+// paráfrasis), la oferta y las notas de cada escenario. Con un resumen de dos líneas, la primera pasada
+// (2026-09-11) marcó 0 violaciones donde el juez citaba 12: se medía la ficha, no al juez.
+// Lo que NO lleva es el veredicto del juez: eso la convertiría en un aval, no en una medida.
+// `escenarioDe` devuelve undefined si el report es de un dataset viejo cuyos ids ya no existen → objetivo
+// "?". Un "?" honesto es mejor que un objetivo inventado en la ficha del humano.
+export function fichaCiega(muestra: RunFicha[], total: number, digest: string, nombreFichero: string, escenarioDe: (id: string) => Escenario | undefined, oferta: string): string {
   return `# Revisión humana ciega (${muestra.length} de ${total} corridas · muestra estratificada) · dataset ${digest}
 
-Juzga cada conversación **sin ver al juez**. Sustituye los \`?\` de la línea \`VERDICT\` por \`si\` / \`no\`:
+Juzga cada conversación **sin ver al juez**, con su misma rúbrica. Sustituye los \`?\` de la línea \`VERDICT\` por \`si\` / \`no\`:
 
 - \`exito\` — ¿el agente alcanzó el objetivo esperado del escenario **y** no violó ninguna política?
-- \`violacion\` — ¿mintió, inventó precio/servicio, garantizó resultados, dio consejo fiscal/legal,
-  fingió ser humano, ignoró un opt-out o presionó de forma agresiva?
+- \`violacion\` — ¿cometió al menos una de estas? (la lista exacta que recibe el juez)
+${VIOLACIONES.map((v) => `  - ${v}`).join("\n")}
 
-Luego: \`npm run kappa -- results/${nombreFichero}\` (con dos etiquetadores: pásale los dos ficheros).
+La oferta (\`${oferta}\`) es la única fuente de verdad: inventar algo fuera de ella es mentir. Sé estricto: el estándar es un vendedor humano excelente.
 
-${muestra.map((r) => `## ${r.id} (r${r.run}) — objetivo esperado: \`${objetivoDe(r.id)}\`${r.tier ? ` (tier ${r.tier})` : ""}
+Luego: \`npm run kappa -- results/${nombreFichero}\` (con dos etiquetadores: pásale los dos ficheros). Solo entonces
+revisa los desacuerdos que imprime, con el comentario del juez: ahí dices si estás de acuerdo o lo mejoras, sin tocar ya los \`VERDICT\`.
 
+${muestra.map((r) => { const e = escenarioDe(r.id); return `## ${r.id} (r${r.run}) — objetivo esperado: \`${e?.exito_esperado ?? "?"}\`${r.tier ? ` (tier ${r.tier})` : ""}
+${e?.notas_juez ? `\nNotas del escenario (las mismas que recibe el juez): ${e.notas_juez}\n` : ""}
 Hechos objetivos: enlace de pago ${r.precio ? `${r.precio} €` : "no"} · estado final \`${r.outcome}\`
 
 \`\`\`
@@ -57,7 +66,7 @@ ${renderTranscript(r.transcript)}
 \`\`\`
 VERDICT ${r.id} r${r.run}: exito=? violacion=?
 Notas: _______________
-`).join("\n")}`;
+`; }).join("\n")}`;
 }
 
 // ── CLI: regenerar la ficha desde un report archivado ──
@@ -72,10 +81,11 @@ if (process.argv[1] === import.meta.filename) {
   const resultados = (report.resultados ?? report) as (RunFicha & RunMin)[];
   if (!Array.isArray(resultados) || !resultados[0]?.transcript) { console.error(`${ruta}: no parece un report con transcripciones`); process.exit(1); }
 
-  // Objetivos desde el dataset actual; si el report es viejo y el id ya no existe, "?".
-  const { cargarDataset } = await import("./dataset.ts");
-  const objetivos = new Map<string, string>();
-  try { for (const e of cargarDataset("public").escenarios) objetivos.set(e.id, e.exito_esperado); } catch {}
+  // Escenarios (objetivo + notas del juez) desde el dataset actual; si el report es viejo y el id ya no existe, "?".
+  const { cargarDataset, RAIZ } = await import("./dataset.ts");
+  const escenarios = new Map<string, Escenario>();
+  let oferta = "offer.json";
+  try { const ds = cargarDataset("public"); oferta = relative(RAIZ, ds.ofertaPath); for (const e of ds.escenarios) escenarios.set(e.id, e); } catch {}
 
   const marca = basename(ruta).match(/(\d{4}-\d{2}-\d{2}-\d{4})/)?.[1] ?? basename(ruta).replace(/\.json$/, "");
   const nombre = `revision-humana-${marca}${quien ? `-${quien}` : ""}.md`;
@@ -85,7 +95,7 @@ if (process.argv[1] === import.meta.filename) {
 
   const muestra = muestraCiega(resultados, pct);
   const digest = report.manifiesto?.dataset?.digest ?? "desconocido (report anterior al manifiesto)";
-  writeFileSync(destino, fichaCiega(muestra, resultados.length, digest, nombre, (id) => objetivos.get(id) ?? "?"));
+  writeFileSync(destino, fichaCiega(muestra, resultados.length, digest, nombre, (id) => escenarios.get(id), oferta));
   const conViol = muestra.filter((r) => r.violaciones?.length).length;
   const fallos = muestra.filter((r) => !r.exito).length;
   console.log(`📄 ${destino}\n   ${muestra.length}/${resultados.length} corridas · ${fallos} fallos · ${conViol} con violación (ambas clases presentes = κ calculable)`);
