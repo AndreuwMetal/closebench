@@ -1,6 +1,6 @@
 # CloseBench
 
-[![ci](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml)
+[![ci](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreuwMetal/closebench/actions/workflows/ci.yml) [![Hugging Face dataset](https://img.shields.io/badge/%F0%9F%A4%97%20dataset-AndreuwMetal%2Fclosebench-yellow)](https://huggingface.co/datasets/AndreuwMetal/closebench)
 
 **The reference benchmark for AI sales agents.**
 
