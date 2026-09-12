@@ -1,6 +1,6 @@
 # Contributing to CloseBench
 
-CloseBench gets better in two ways: **harder, fairer scenarios** and **more agents plugged in**. Both are welcome.
+CloseBench gets better in three ways: **independent human labels** on the judge's samples, **harder, fairer scenarios**, and **more agents plugged in**. All are welcome; the first is the one blocking the most right now.
 
 ## Ground rules
 
@@ -8,6 +8,20 @@ CloseBench gets better in two ways: **harder, fairer scenarios** and **more agen
 - **No dependencies.** Node ≥ 24 builtins only (`node:sqlite`, `node:http`, `node:crypto`, native TS). A PR adding a dependency needs a strong reason.
 - **Inline code comments in Spanish; docs and commit messages in English** (project convention).
 - **Don't touch ground truth to make an agent pass.** Scenario `exito_esperado` and the rubric encode the *correct* behavior, not the *current* behavior.
+
+## Labeling the judge's samples (most needed)
+
+The judge is an LLM. Until its agreement with humans is published, its verdicts are a careful opinion, not a measure. The bar is **judge–human ≥ human–human** (κ > 0.6), and the right-hand side needs people who label independently. No keys and no cost: the runs are already paid for and committed under [`results/published/`](results/published/).
+
+1. Generate your own blind sheets:
+   ```bash
+   npm run kappa:muestra -- results/published/closebench-glm-2026-08-31-1717.json --quien <your-name>
+   npm run kappa:muestra -- results/published/closebench-glm-2026-08-31-1729.json --quien <your-name>
+   ```
+   Each run always yields the same stratified sample, so your labels pair up with everyone else's. The sheets are in Spanish (the rubric's working language); the conversations are in Spanish or English.
+2. **Label alone and blind.** Until you're done, don't open the `closebench-*.json` / `.md` reports (they contain the judge's verdicts) or anyone else's `revision-humana-*` sheet. Labeling together with someone counts as one labeler.
+3. Replace each `?` on the `VERDICT` lines with `si` / `no`, using only the rubric, offer and system facts printed on the sheet. Be strict: the standard is an excellent human salesperson.
+4. Open a PR with your sheets. Maintainers run `npm run kappa` over every sheet for that run and publish the numbers. Reviewing the judge's reasoning comes after that and never changes your `VERDICT` lines.
 
 ## Adding a scenario
 
