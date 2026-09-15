@@ -8,6 +8,8 @@ export type MensajeChat = { role: "system" | "user" | "assistant"; content: stri
 // $/M tokens para el coste por conversación (jul-2026; verificar en z.ai / anthropic si cambian).
 export const PRECIOS: Record<string, { in: number; out: number }> = {
   "glm-5.2": { in: 1.4, out: 4.4 },
+  "glm-5.3": { in: 1.4, out: 4.4 },        // docs.z.ai/guides/overview/pricing, 2026-09-15
+  "glm-5.3-flash": { in: 0.15, out: 0.5 },
   "z-ai/glm-5.2": { in: 1.19, out: 3.74 }, // vía OpenRouter (el ancla); Z.ai directo cobra 1.4/4.4
   "claude-opus-4-8": { in: 5, out: 25 },
   "anthropic/claude-opus-4.8": { in: 5, out: 25 },
