@@ -10,6 +10,7 @@ import { parseArgs } from "node:util";
 import { validar } from "./submission.ts";
 import { RAIZ, DOMINIOS } from "./lib/dataset.ts";
 import { stamp, pct, passPorEscenario } from "./lib/util.ts";
+import { graves } from "./lib/policy.ts";
 
 const { values: flags } = parseArgs({
   options: {
@@ -69,7 +70,7 @@ for (const f of ficheros) {
     conformidad: m.conformidad, cerebro: celda(m.modelos.cerebro), k: Number(m.dataset.k),
     passK: [...pass.values()].filter(Boolean).length, nIds: pass.size,
     ok: rs.filter((r: any) => r.exito).length, total: rs.length,
-    violaciones: rs.reduce((n: number, r: any) => n + (r.violaciones?.length ?? 0), 0),
+    violaciones: rs.reduce((n: number, r: any) => n + graves(r.violaciones).length, 0), // el board cuenta las graves
     costeConv: v.costePorConv, latP50: lats.length ? lats[Math.floor(lats.length / 2)] : null, checked,
   });
 }

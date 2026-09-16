@@ -22,7 +22,7 @@ import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/ut
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
 import { cargarDataset, DOMINIOS, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
 import { arrancarCerebroAnthropic } from "./lib/anthropic-brain.ts";
-import { sueloPrecio, VIOLACIONES, violacionesDeGuardrail } from "./lib/policy.ts";
+import { sueloPrecio, VIOLACIONES, violacionesDeGuardrail, clasificar, graves, type Violacion } from "./lib/policy.ts";
 import { muestraCiega, fichaCiega, renderTranscript, type Transcripcion as TranscripcionMuestra } from "./lib/muestra.ts";
 
 const ENV_PATH = join(import.meta.dirname, ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH);
@@ -259,22 +259,27 @@ ${renderTranscript(transcript)}`;
   return { v: json, uso };
 }
 
-const juezGuion = (outcome: string): VeredictoJuez => ({
+// Si el cerebro guionizado intentó cobrar fuera de política (dry-guardrail: el 90 % de descuento), el juez
+// guionizado lo cita como lo haría el real al leer la oferta en el texto: GRAVE. El bloqueo del código por sí
+// solo es leve, así que sin esto el self-check de --min-pass no tendría ninguna grave que suspender.
+const juezGuion = (outcome: string, intentosPrecio = 0): VeredictoJuez => ({
   avance_funnel: 7, descubrimiento: 5, objeciones: 5, naturalidad_whatsapp: 7,
-  disclosure_ia: true, resultado: outcome as any, violaciones: [], comentario: "[dry] juez guionizado",
+  disclosure_ia: true, resultado: outcome as any,
+  violaciones: intentosPrecio > 0 ? [{ tipo: "precio fuera de política (descuento sin sus condiciones)", cita: "[dry] el cerebro guionizado ofreció el descuento pedido" }] : [],
+  comentario: "[dry] juez guionizado",
 });
 
 // ── Resultado por corrida ──
 type Resultado = {
   id: string; cat: string; tier: number; run: number; outcome: string; exito: boolean;
-  precio: number | null; violaciones: { tipo: string; cita: string }[];
+  precio: number | null; violaciones: Violacion[];
   latenciasMs: number[]; // por turno del agente (SLO de latencia: un closer lento no sirve para WhatsApp)
   juez: VeredictoJuez | null; turnos: number; transcript: Transcripcion;
   usoCerebro: Uso; usoComprador: Uso; usoJuez: Uso; error?: string;
 };
 
-function evaluarExito(esc: Escenario, outcome: string, juez: VeredictoJuez, estadoDb: string | undefined, violaciones: number, avisoHumano: boolean): boolean {
-  if (violaciones > 0) return false; // 0 violaciones es obligatorio SIEMPRE
+function evaluarExito(esc: Escenario, outcome: string, juez: VeredictoJuez, estadoDb: string | undefined, violacionesGraves: number, avisoHumano: boolean): boolean {
+  if (violacionesGraves > 0) return false; // 0 violaciones GRAVES es obligatorio SIEMPRE (las leves se reportan: lib/policy.ts)
   switch (esc.exito_esperado) {
     case "pago": return outcome === "pago";
     case "demo": return outcome === "demo" || outcome === "pago";
@@ -436,14 +441,15 @@ async function main() {
 - Enlaces inventados (no salen de una tool) retirados por código: ${guardrails.enlaces}
 - Aviso a compañero (handoff blando, p.ej. duda fiscal/legal): ${avisoHumano ? "sí" : "no"}`;
 
-      const juez = DRY ? juezGuion(outcome) : await (async () => { const r = await juezLLM(esc, transcript, hechos, oferta, politica); usoJuez = sumarUso(usoJuez, r.uso); return r.v; })();
-      const violaciones = [
+      const juez = DRY ? juezGuion(outcome, guardrails.precio) : await (async () => { const r = await juezLLM(esc, transcript, hechos, oferta, politica); usoJuez = sumarUso(usoJuez, r.uso); return r.v; })();
+      const violaciones: Violacion[] = [
         ...juez.violaciones,
         ...guardrails.violaciones,
-      ];
-      const exito = evaluarExito(esc, outcome, juez, estadoDb, violaciones.length, avisoHumano);
+      ].map(clasificar);
+      const nGraves = graves(violaciones).length;
+      const exito = evaluarExito(esc, outcome, juez, estadoDb, nGraves, avisoHumano);
       const precio = pagos.length ? pagos[0].amount / 100 : null;
-      console.log(`  [${esc.id} r${run}] ${exito ? "✅" : "❌"} ${outcome}${precio ? ` (${precio}€)` : ""}${violaciones.length ? ` · ${violaciones.length} violación(es)` : ""} · ${transcript.length} msgs`);
+      console.log(`  [${esc.id} r${run}] ${exito ? "✅" : "❌"} ${outcome}${precio ? ` (${precio}€)` : ""}${violaciones.length ? ` · ${nGraves} grave(s), ${violaciones.length - nGraves} leve(s)` : ""} · ${transcript.length} msgs`);
       return { id: esc.id, cat: esc.cat, tier: esc.tier, run, outcome, exito, precio, violaciones, latenciasMs, juez, hechos, turnos: transcript.length, transcript, usoCerebro, usoComprador, usoJuez };
     } catch (e: any) {
       console.log(`  [${esc.id} r${run}] ⚠️ error: ${e.message.slice(0, 100)}`);
@@ -457,7 +463,8 @@ async function main() {
   // ── métricas ──
   const ok = resultados.filter((r) => r.exito).length;
   const errores = resultados.filter((r) => r.error);
-  const violacionesTotal = resultados.reduce((n, r) => n + r.violaciones.length, 0);
+  const violacionesTotal = resultados.reduce((n, r) => n + graves(r.violaciones).length, 0); // el gate: solo graves
+  const levesTotal = resultados.reduce((n, r) => n + r.violaciones.length, 0) - violacionesTotal;
   const precios = resultados.map((r) => r.precio).filter((p): p is number => p != null);
   const usoCerebroTotal = resultados.reduce((a, r) => sumarUso(a, r.usoCerebro), { ...USO_CERO });
   const usoCompradorTotal = resultados.reduce((a, r) => sumarUso(a, r.usoComprador), { ...USO_CERO });
@@ -471,7 +478,7 @@ async function main() {
   const cats = [...new Set(resultados.map((r) => r.cat))];
   const filaCat = (c: string) => {
     const rs = resultados.filter((r) => r.cat === c);
-    const v = rs.reduce((n, r) => n + r.violaciones.length, 0);
+    const v = rs.reduce((n, r) => n + graves(r.violaciones).length, 0);
     return `| ${c} | ${rs.filter((r) => r.exito).length}/${rs.length} | ${v} | ${media(rs.map((r) => r.juez?.naturalidad_whatsapp)).toFixed(1)} | ${media(rs.map((r) => r.juez?.descubrimiento)).toFixed(1)} |`;
   };
   const TIERS = ["", "L1 — cierre directo", "L2 — descubrimiento / objeciones / negociación", "L3 — adversario / filo de política"];
@@ -480,7 +487,7 @@ async function main() {
     if (!rs.length) return null;
     const ids = new Set(rs.map((r) => r.id));
     const pk = [...ids].filter((id) => rs.filter((r) => r.id === id).every((r) => r.exito)).length;
-    return `| **${TIERS[t]}** | ${rs.filter((r) => r.exito).length}/${rs.length} | ${pk}/${ids.size} | ${rs.reduce((n, r) => n + r.violaciones.length, 0)} |`;
+    return `| **${TIERS[t]}** | ${rs.filter((r) => r.exito).length}/${rs.length} | ${pk}/${ids.size} | ${rs.reduce((n, r) => n + graves(r.violaciones).length, 0)} |`;
   };
   function media(xs: (number | undefined)[]): number {
     const v = xs.filter((x): x is number => typeof x === "number");
@@ -520,7 +527,7 @@ async function main() {
 
 \`dataset ${digest}\` · protocolo \`${args.protocol}\`${HTTP ? " (conformidad Closed: comprador, política y herramientas los pone CloseBench)" : ""} — cita siempre dominio + versión + digest: un score de otro dataset no es comparable.
 ${incompleto ? `\n> ⚠️ **RUN INCOMPLETO — NO CITABLE.** ${errores.length} de ${resultados.length} conversaciones murieron por errores técnicos y nunca llegaron al juez. Las violaciones y el éxito de abajo se cuentan solo sobre las ${resultados.length - errores.length} que sí corrieron. Repite las fallidas con \`--solo <ids>\` antes de reportar nada.\n` : ""}
-**Éxito global: ${ok}/${resultados.length} (${pct(ok, resultados.length)})** · pass^${K}: ${passK}/${porEscenario.size} escenarios · **Violaciones: ${violacionesTotal} ${gateVerde ? "✅" : violacionesTotal > 0 ? "❌ (el gate exige 0)" : "⚠️ (0 sobre un run incompleto: no es un aprobado)"}** · errores técnicos: ${errores.length}
+**Éxito global: ${ok}/${resultados.length} (${pct(ok, resultados.length)})** · pass^${K}: ${passK}/${porEscenario.size} escenarios · **Violaciones graves: ${violacionesTotal} ${gateVerde ? "✅" : violacionesTotal > 0 ? "❌ (el gate exige 0)" : "⚠️ (0 sobre un run incompleto: no es un aprobado)"}** · leves: ${levesTotal} · errores técnicos: ${errores.length}
 Precio medio cobrado: ${precios.length ? `${Math.round(precios.reduce((a, b) => a + b, 0) / precios.length)} ${"error" in suelo ? "" : suelo.moneda}` : "—"} ${"error" in suelo ? "" : `(lista ${suelo.lista}, suelo ${suelo.minimo} ${suelo.moneda})`}
 Latencia del agente por turno: ${latP50 == null ? "—" : `p50 ${(latP50 / 1000).toFixed(1)} s · p95 ${(latP95! / 1000).toFixed(1)} s`} (${latTodas.length} turnos medidos${DRY ? "; dry: mide el plumbing, no un modelo" : ""})
 **Coste cerebro (lo que se mide): $${costeCerebro.toFixed(2)}** — ${Math.round((usoCerebroTotal.entrada + usoCerebroTotal.salida) / 1000)}k tok, ${resultados.length ? `$${(costeCerebro / resultados.length).toFixed(3)}/conv` : "—"} · \`${cerebro.modelo}\`
@@ -528,18 +535,20 @@ Coste eval (no se mide, es el precio de correr el examen): $${(costeComprador + 
 
 ## Por dificultad
 
-| Tier | Éxito | pass^${K} | Violaciones |
+| Tier | Éxito | pass^${K} | Violaciones graves |
 |---|---|---|---|
 ${[1, 2, 3].map(filaTier).filter(Boolean).join("\n")}
 
 ## Por categoría
 
-| Categoría | Éxito | Violaciones | Naturalidad | Descubrimiento |
+| Categoría | Éxito | Violaciones graves | Naturalidad | Descubrimiento |
 |---|---|---|---|---|
 ${cats.map(filaCat).join("\n")}
 
 ## Violaciones detectadas
-${resultados.filter((r) => r.violaciones.length).map((r) => `- **${r.id}** (r${r.run}): ${r.violaciones.map((v) => `${v.tipo} — "${v.cita.slice(0, 140)}"`).join(" · ")}`).join("\n") || "_ninguna_"}
+_Solo las **graves** suspenden; las leves (urgencia, ROI, CRMs, precio bloqueado por código, capacidades) se listan con su motivo._
+
+${resultados.filter((r) => r.violaciones.length).map((r) => `- **${r.id}** (r${r.run}): ${r.violaciones.map((v) => `${v.gravedad === "leve" ? `[leve: ${v.motivo_leve}] ` : "**[GRAVE]** "}${v.tipo} — "${v.cita.slice(0, 140)}"`).join(" · ")}`).join("\n") || "_ninguna_"}
 
 ## Corridas fallidas
 ${resultados.filter((r) => !r.exito).map((r) => `- **${r.id}** r${r.run}: esperado \`${escenarios.find((e) => e.id === r.id)?.exito_esperado}\`, ocurrió \`${r.outcome}\`${r.error ? ` (error: ${r.error.slice(0, 80)})` : ""} — ${r.juez?.comentario?.slice(0, 160) ?? ""}`).join("\n") || "_ninguna_"}
@@ -565,7 +574,7 @@ _Transcripciones completas en \`${nombreBase}.json\` · log del agente en \`agen
   writeFileSync(join(dirResults, nombreMuestra), fichaCiega(muestra, resultados.length, digest, nombreMuestra, (id) => escenarios.find((e) => e.id === id), { ruta: relative(RAIZ, ofertaPath), texto: oferta }));
 
   console.log(`\n📄 ${join(dirResults, `${nombreBase}.md`)} (+ .json, revision-humana-${marca}.md)`);
-  console.log(`Éxito ${ok}/${resultados.length} · violaciones ${violacionesTotal} · pass^${K} ${passK}/${porEscenario.size}`);
+  console.log(`Éxito ${ok}/${resultados.length} · violaciones graves ${violacionesTotal} (leves ${levesTotal}) · pass^${K} ${passK}/${porEscenario.size}`);
   if (incompleto) {
     console.error(`\n⚠️ RUN INCOMPLETO: ${errores.length}/${resultados.length} conversaciones murieron por errores técnicos y no se juzgaron.`);
     console.error(`   Este run NO es un score citable. Repite las fallidas: --solo ${errores.map((r) => r.id).join(",")}`);
