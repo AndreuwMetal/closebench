@@ -21,7 +21,7 @@ Your agent is spawned with these environment variables. Endpoints point at Close
 | `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID` | Dummy channel credentials (`"bench"`). |
 | `STRIPE_BASE_URL` | Mock Stripe. Create Checkout Sessions here; amount + invoice flag are captured. |
 | `STRIPE_API_KEY` | Dummy (`sk_bench_mock`). |
-| `GLM_BASE_URL`, `ZAI_API_KEY`, `GLM_MODEL` | The **brain under test** (OpenAI-compatible). In `--dry` these point at the mock scripted brain; with `--brain opus` they're swapped for Opus via OpenRouter. Use them, or your own model — but then *you* pay and *you* report cost. |
+| `GLM_BASE_URL`, `ZAI_API_KEY`, `GLM_MODEL` | The **brain under test** (OpenAI-compatible). In `--dry` these point at the mock scripted brain; with `--brain opus` (or any `--brain claude-*`) they point at a local proxy that calls the native Anthropic API with prompt caching (`lib/anthropic-brain.ts`, effort `CLAUDE_BRAIN_EFFORT`, default `low`); with `--brain <openrouter-slug>`, at OpenRouter. Use them, or your own model — but then *you* pay and *you* report cost. |
 | `SALES_PROMPT` | Path to the system prompt to use (lets the bench run `--prompt` variants, e.g. the bad-prompt control). |
 | `OFERTA_PATH` | Path to `offer.json` — the offer under test. |
 | `SUCCESS_URL`, `CAL_LINK` | Post-payment redirect and the demo-calendar link your `agendar_demo` tool should return. |

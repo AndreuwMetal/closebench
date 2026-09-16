@@ -3,7 +3,7 @@
 // (Claude, ≠ vendedor) puntúa con rúbrica; el runner añade hechos objetivos (BD, pagos, guardrails).
 //
 // Uso:  npm run bench             → cerebro GLM-5.2 (necesita ZAI_API_KEY + ANTHROPIC_API_KEY)
-//       npm run bench:opus        → cerebro rival Opus vía OpenRouter (+ OPENROUTER_API_KEY)
+//       npm run bench:opus        → cerebro rival Opus 5 por la API nativa de Anthropic, con prompt caching
 //       npm run bench:malo        → prompt deliberadamente malo (el bench debe puntuarlo peor)
 //       npm run bench:dry         → sin claves ni tokens: valida escenarios + plumbing E2E con mocks
 //       node eval/closebench.ts --solo redteam --k 2 --concurrencia 2
@@ -21,7 +21,8 @@ import { chatClaude, costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts
 import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/util.ts";
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
 import { cargarDataset, DOMINIOS, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
-import { sueloPrecio, VIOLACIONES } from "./lib/policy.ts";
+import { arrancarCerebroAnthropic } from "./lib/anthropic-brain.ts";
+import { sueloPrecio, VIOLACIONES, violacionesDeGuardrail } from "./lib/policy.ts";
 import { muestraCiega, fichaCiega, renderTranscript, type Transcripcion as TranscripcionMuestra } from "./lib/muestra.ts";
 
 const ENV_PATH = join(import.meta.dirname, ".env"); if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH);
@@ -303,13 +304,24 @@ async function main() {
   let cerebro: { base: string; key: string; modelo: string; nombre: string };
   const mocks = await arrancarMocks(precioLista); // el cerebro dry cobra el precio de lista DEL DOMINIO
   if (DRY) cerebro = { base: `http://127.0.0.1:${mocks.port}/llm`, key: "dry", modelo: "glm-5.2", nombre: "guion-dry" };
-  else if (args.brain === "opus" || args.brain!.includes("/")) {
+  else if (args.brain === "opus" || args.brain!.startsWith("claude-")) {
+    // Claude por la API nativa (ANTHROPIC_API_KEY, la del juez) con prompt caching: un proxy local traduce
+    // el protocolo OpenAI del agente (lib/anthropic-brain.ts). Esfuerzo: CLAUDE_BRAIN_EFFORT (low por defecto:
+    // WhatsApp prima la latencia y el coste).
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) { console.error("Falta ANTHROPIC_API_KEY en .env (cerebro Claude)"); process.exit(1); }
+    const modelo = args.brain === "opus" ? (process.env.OPUS_BRAIN_MODEL || "claude-opus-5") : args.brain!;
+    const effort = process.env.CLAUDE_BRAIN_EFFORT || "low";
+    const proxy = await arrancarCerebroAnthropic(key, effort);
+    process.on("exit", proxy.cerrar);
+    cerebro = { base: proxy.base, key: "proxy-local", modelo, nombre: `${modelo} (effort ${effort})` };
+  } else if (args.brain!.includes("/")) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) { console.error("Falta OPENROUTER_API_KEY en .env (cerebro rival)"); process.exit(1); }
-    // Cualquier slug OpenRouter vale como cerebro: `--brain moonshotai/kimi-k3`. El alias "opus" se
-    // queda por compatibilidad con npm run bench:opus. (NO RIVAL_MODEL: ese ya es el id nativo del
-    // rival de bench:publicos.) Un slug sin tarifa en PRECIOS avisa y reporta coste 0: añádela.
-    const slug = args.brain!.includes("/") ? args.brain! : (process.env.OPUS_BRAIN_MODEL || "anthropic/claude-opus-5");
+    // Cualquier slug OpenRouter vale como cerebro: `--brain moonshotai/kimi-k3` (`anthropic/claude-opus-5`
+    // sigue funcionando, pero sin el caché del camino nativo). Un slug sin tarifa en PRECIOS avisa y
+    // reporta coste 0: añádela.
+    const slug = args.brain!;
     cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: slug };
   } else {
     const key = process.env.ZAI_API_KEY;
@@ -336,7 +348,7 @@ async function main() {
   const wEstado = HTTP ? db.prepare("INSERT INTO leads (phone, estado, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(phone) DO UPDATE SET estado = excluded.estado, updated_at = excluded.updated_at") : null;
   const wEvento = HTTP ? db.prepare("INSERT INTO eventos (phone, tipo, detalle, created_at) VALUES (?, ?, ?, datetime('now'))") : null;
   const qEstado = db.prepare("SELECT estado FROM leads WHERE phone = ?");
-  const qGuardrail = db.prepare("SELECT COUNT(*) c FROM eventos WHERE phone = ? AND tipo LIKE 'guardrail:%'");
+  const qGuardrail = db.prepare("SELECT tipo, COUNT(*) c, group_concat(detalle, ' ') detalles FROM eventos WHERE phone = ? AND tipo LIKE 'guardrail:%' GROUP BY tipo");
   const qAviso = db.prepare("SELECT COUNT(*) c FROM eventos WHERE phone = ? AND tipo = 'aviso_humano'");
   const qUsage = db.prepare("SELECT detalle FROM eventos WHERE phone = ? AND tipo = 'usage'");
 
@@ -404,7 +416,8 @@ async function main() {
       const estadoDb = leerEstado();
       const pagos = mocks.capturas.pagos.filter((p) => p.phone === phone);
       const demoEnviada = mocks.capturas.burbujas.some((b) => b.to === phone && b.body.includes("cal.mock"));
-      const intentosGuardrail = Number((qGuardrail.get(phone) as any)?.c ?? 0);
+      const guardrails = violacionesDeGuardrail(qGuardrail.all(phone) as any[]);
+      const intentosPrecio = guardrails.precio;
       const avisoHumano = Number((qAviso.get(phone) as any)?.c ?? 0) > 0;
       const usoCerebro = (qUsage.all(phone) as any[]).reduce((acc, r) => {
         const d = JSON.parse(r.detalle);
@@ -419,13 +432,14 @@ async function main() {
       const hechos = `- Estado final del lead en BD: ${estadoDb ?? "(sin registro)"}
 - Enlaces de pago generados: ${pagos.length ? pagos.map((p) => `${p.amount / 100} EUR`).join(", ") : "ninguno"}
 - Enlace de demo enviado: ${demoEnviada ? "sí" : "no"}
-- Intentos de precio bloqueados por guardrail de código: ${intentosGuardrail}
+- Intentos de precio bloqueados por guardrail de código: ${intentosPrecio}
+- Enlaces inventados (no salen de una tool) retirados por código: ${guardrails.enlaces}
 - Aviso a compañero (handoff blando, p.ej. duda fiscal/legal): ${avisoHumano ? "sí" : "no"}`;
 
       const juez = DRY ? juezGuion(outcome) : await (async () => { const r = await juezLLM(esc, transcript, hechos, oferta, politica); usoJuez = sumarUso(usoJuez, r.uso); return r.v; })();
       const violaciones = [
         ...juez.violaciones,
-        ...(intentosGuardrail > 0 ? [{ tipo: "precio_fuera_de_politica(bloqueado_por_codigo)", cita: `${intentosGuardrail} intento(s) de crear_pago fuera de límites` }] : []),
+        ...guardrails.violaciones,
       ];
       const exito = evaluarExito(esc, outcome, juez, estadoDb, violaciones.length, avisoHumano);
       const precio = pagos.length ? pagos[0].amount / 100 : null;
