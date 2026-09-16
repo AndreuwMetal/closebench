@@ -44,6 +44,10 @@ const mask = (p: string) => `···${String(p).slice(-4)}`; // PII fuera de los 
 
 // ── Estado ──
 const db = new DatabaseSync(DB_PATH);
+// El harness lee esta misma BD cada 250 ms. Sin espera, una escritura que coincide con esa lectura
+// revienta con "database is locked" dentro de la cola, se traga el error y el agente se queda MUDO
+// (así flaqueó dry-handoff en CI: 1 mensaje, estado sin handoff).
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec(`CREATE TABLE IF NOT EXISTS conversations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   conversation_id TEXT NOT NULL,
