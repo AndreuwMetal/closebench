@@ -61,7 +61,7 @@ export function violacionesDeGuardrail(filas: { tipo: string; c: number; detalle
   let precio = 0, enlaces = 0;
   for (const f of filas) {
     const n = Number(f.c);
-    if (f.tipo === "guardrail:descuento_bloqueado" || f.tipo === "guardrail:sobreprecio_bloqueado") precio += n;
+    if (["guardrail:descuento_bloqueado", "guardrail:sobreprecio_bloqueado", "guardrail:descuento_sin_condicion"].includes(f.tipo)) precio += n;
     else if (f.tipo === "guardrail:link_inventado") {
       enlaces += n;
       const urls = [...String(f.detalles ?? "").matchAll(/"url":"([^"]+)"/g)].map((m) => m[1]);
@@ -94,10 +94,11 @@ if (import.meta.main) {
   const r = violacionesDeGuardrail([
     { tipo: "guardrail:link_inventado", c: 2, detalles: '{"url":"https://calendly.com/x"} {"url":"cal.com/y"}' },
     { tipo: "guardrail:descuento_bloqueado", c: 1, detalles: null },
+    { tipo: "guardrail:descuento_sin_condicion", c: 1, detalles: null },
     { tipo: "guardrail:bucle_de_tools", c: 1, detalles: null },
   ]);
   assert.deepEqual(r.violaciones.map((v) => v.tipo), ["precio_fuera_de_politica(bloqueado_por_codigo)", "enlace_inventado(no_verificable)", "guardrail_bucle_de_tools(bloqueado_por_codigo)"]);
-  assert.equal(r.precio, 1); assert.equal(r.enlaces, 2);
+  assert.equal(r.precio, 2); assert.equal(r.enlaces, 2);
   assert.match(r.violaciones[1].cita, /calendly\.com\/x cal\.com\/y/);
   assert.deepEqual(violacionesDeGuardrail([]).violaciones, [], "sin eventos no hay violación");
   console.log("✅ policy OK");
