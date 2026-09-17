@@ -25,7 +25,8 @@
     "leaderboard": "node leaderboard.ts",
     "test:stage3": "node submission.ts selftest",
     "negotiation": "node negotiation.ts",
-    "negotiation:dry": "node negotiation.ts --dry"
+    "negotiation:dry": "node negotiation.ts --dry",
+    "test:unit": "node lib/policy.ts && node lib/anthropic-brain.ts"
   },
   "engines": { "node": ">=24" }
 }

@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, copyFileSync, rmSync, mkdtempSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { graves } from "./lib/policy.ts";
 import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
@@ -201,7 +202,7 @@ export async function verificar(path: string, opts: { seed?: number; frac?: numb
   // llevan temperatura: exigir igualdad token a token sería teatro; igualdad de outcomes no lo es.
   const passClaimed = passPorEscenario(v.informe.resultados.filter((r: any) => sel.includes(r.id)));
   const passRerun = passPorEscenario(rerun.resultados);
-  const violDe = (rs: any[], id: string) => rs.filter((r) => r.id === id).some((r) => (r.violaciones ?? []).length > 0);
+  const violDe = (rs: any[], id: string) => rs.filter((r) => r.id === id).some((r) => graves(r.violaciones).length > 0);
   const detalle = sel.map((id) => {
     const claimed = { pass: passClaimed.get(id) ?? false, viol: violDe(v.informe.resultados, id) };
     const re = { pass: passRerun.get(id) ?? false, viol: violDe(rerun.resultados, id) };

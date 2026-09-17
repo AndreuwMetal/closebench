@@ -34,6 +34,9 @@ jobs:
       - name: Negotiation track (dry)
         run: npm run negotiation:dry
 
+      - name: Unit checks (policy, cerebro Claude)
+        run: npm run test:unit
+
       - name: Anti-gaming selftest (validate/verify/leaderboard, informes dopados incluidos)
         run: npm run test:stage3
 
