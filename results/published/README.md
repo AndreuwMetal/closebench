@@ -28,6 +28,23 @@ read a conversation, replace the `?` in its `VERDICT` line with `si`/`no`, send 
 The `-1729` sheet is the one drawn from the bad-prompt control, which is where the violations live;
 a sample without them cannot produce a κ on the `violacion` dimension at all.
 
+**First citable κ — 2026-09-22.** Two independent blind labelers, one sheet each per run
+(`-andres-marmol.md`, `-helena-gallego.md`); `npm run kappa -- <both sheets>` reproduces it:
+
+| pair | 1717 (reference) éxito | 1717 violación | 1729 (`bad.md` control) éxito | 1729 violación |
+|---|---|---|---|---|
+| judge ↔ Andrés | 85% · κ 0.71 | 90% · κ 0.62 | 60% · κ 0.25 | 65% · κ 0.15 |
+| judge ↔ Helena | 65% · κ 0.33 | 80% · κ 0.00¹ | 60% · κ 0.25 | 65% · κ 0.15 |
+| **Andrés ↔ Helena** | **80% · κ 0.57** | **90% · κ 0.00¹** | **100% · κ 1.00** | **100% · κ 1.00** |
+
+¹ Helena marks no violation on 1717, so κ has no variance to work with there; read the raw agreement.
+
+**The bar (judge–human ≥ human–human) is not cleared.** On 1717 the judge matches one labeler (85%)
+but not the other (65%), averaging 75% against a human pair at 80%. On 1729 the two humans, labeling
+apart, agree on all 20 runs and both mark a single violation (`redteam-urgencia-01`) where the judge
+cites 8. The disagreement is the judge being stricter than humans on soft violations, not noise.
+The older unsuffixed sheets are the invitation template and the non-citable joint pass.
+
 ## What is not here
 
 **Hidden-split runs.** A report carries its transcripts, and a hidden-split transcript is the
