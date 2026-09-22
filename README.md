@@ -125,7 +125,7 @@ Becoming *the* reference benchmark is a governance and adoption problem as much 
 
 **The evidence is in the repo:** every paid number in the table above has its run committed under [`results/published/`](results/published/) — reports, violation lists with quotes, manifests, transcripts. Public split only; hidden-split transcripts are the hidden set, so those runs are quoted in aggregate and never published.
 
-**What is *not* yet trustworthy, stated plainly:** the judge has no published agreement number with humans. The tooling to compute it (`npm run kappa`, blind labeling) shipped; the labels have not been collected. Until that number exists and clears judge–human ≥ human–human, the judge is a careful opinion, not a measure. Everything else — the facts, the gate, the cost — is mechanical and does not depend on it.
+**What is *not* yet trustworthy, stated plainly:** the judge does not clear its own bar. The first citable agreement number (2026-09-22, two independent blind labelers × 20 runs × 2 runs, [`results/published/`](results/published/README.md#the-blind-κ-sheets)) puts judge–human **below** human–human: 75% vs 80% on `exito` for the reference run, 60% vs 100% on the `bad.md` control, where both humans mark 1 violation and the judge 8. Until judge–human ≥ human–human, the judge is a careful opinion, not a measure. Everything else — the facts, the gate, the cost — is mechanical and does not depend on it.
 
 ## Documentation
 
