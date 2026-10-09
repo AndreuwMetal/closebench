@@ -321,6 +321,7 @@ async function main() {
   if (!escenarios.length) { console.error(`No hay escenarios que casen con --solo ${args.solo ?? "*"} --tier ${args.tier ?? "*"}`); process.exit(1); }
 
   // cerebro bajo examen
+  let cerrarCerebro = () => {};
   let cerebro: { base: string; key: string; modelo: string; nombre: string; proveedor?: string };
   const mocks = await arrancarMocks(precioLista); // el cerebro dry cobra el precio de lista DEL DOMINIO
   if (DRY) cerebro = { base: `http://127.0.0.1:${mocks.port}/llm`, key: "dry", modelo: "glm-5.2", nombre: "guion-dry" };
@@ -333,7 +334,7 @@ async function main() {
     const modelo = args.brain === "opus" ? (process.env.OPUS_BRAIN_MODEL || "claude-opus-5") : args.brain!;
     const effort = process.env.CLAUDE_BRAIN_EFFORT || "low";
     const proxy = await arrancarCerebroAnthropic(key, effort);
-    process.on("exit", proxy.cerrar);
+    cerrarCerebro = proxy.cerrar; // un servidor abierto mantiene vivo el proceso: se cierra con el agente
     cerebro = { base: proxy.base, key: "proxy-local", modelo, nombre: `${modelo} (effort ${effort})` };
   } else if (args.brain!.includes("/")) {
     const key = process.env.OPENROUTER_API_KEY;
@@ -475,6 +476,7 @@ async function main() {
   });
 
   agente.kill();
+  cerrarCerebro();
   mocks.cerrar();
 
   // ── métricas ──

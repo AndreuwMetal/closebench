@@ -87,7 +87,7 @@ export async function arrancarCerebroAnthropic(apiKey: string, effort = "low"): 
     });
   });
   await new Promise<void>((ok) => srv.listen(0, "127.0.0.1", ok));
-  return { base: `http://127.0.0.1:${(srv.address() as any).port}`, cerrar: () => srv.close() };
+  return { base: `http://127.0.0.1:${(srv.address() as any).port}`, cerrar: () => { srv.close(); srv.closeAllConnections(); } };
 }
 
 // Autocomprobación de la traducción (sin red): node lib/anthropic-brain.ts
