@@ -258,6 +258,7 @@ async function chat(messages: any[], useTools: boolean, phone: string | null) {
     ...(useTools ? { tools: TOOLS } : {}),
   };
   if (GLM_MODEL.includes("glm")) body.thinking = { type: "disabled" }; // param propio de GLM; en WhatsApp prima la latencia
+  if (process.env.BRAIN_PROVIDER) body.provider = { order: [process.env.BRAIN_PROVIDER], allow_fallbacks: false }; // OpenRouter: ruta fija (closebench.ts)
   for (let intento = 1; ; intento++) {
     try {
       const res = await fetch(`${GLM_BASE_URL}/chat/completions`, {
@@ -270,7 +271,7 @@ async function chat(messages: any[], useTools: boolean, phone: string | null) {
       if (res.status === 429 || res.status >= 500) throw new Error(`GLM ${res.status}`);
       const data = JSON.parse(texto);
       if (!res.ok || !data.choices) throw Object.assign(new Error(`GLM error: ${JSON.stringify(data.error ?? data).slice(0, 300)}`), { fatal: true });
-      if (data.usage) logEvento(phone, "usage", { model: GLM_MODEL, in: data.usage.prompt_tokens, out: data.usage.completion_tokens });
+      if (data.usage) logEvento(phone, "usage", { model: GLM_MODEL, in: data.usage.prompt_tokens, out: data.usage.completion_tokens, ...(data.provider ? { provider: data.provider } : {}) });
       return data.choices[0].message;
     } catch (e: any) {
       if (e.fatal || intento >= 2) throw e;

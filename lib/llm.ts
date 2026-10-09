@@ -3,6 +3,15 @@
 import { sleep } from "./util.ts";
 
 export type Uso = { entrada: number; salida: number };
+
+// OpenRouter reparte cada petición entre decenas de proveedores (precios ×20 de diferencia, posibles
+// cuantizaciones): sin fijar la ruta, un baseline no es reproducible ni su coste es el de PRECIOS.
+// Se fija al proveedor oficial del modelo, sin fallback. OPENROUTER_PROVIDER lo sobrescribe.
+export const PROVEEDOR_OFICIAL: Record<string, string> = {
+  "z-ai/": "z-ai", "moonshotai/": "moonshotai", "qwen/": "alibaba", "anthropic/": "anthropic", "openai/": "openai",
+};
+export const proveedorOpenRouter = (slug: string): string | undefined =>
+  process.env.OPENROUTER_PROVIDER?.trim() || Object.entries(PROVEEDOR_OFICIAL).find(([pre]) => slug.startsWith(pre))?.[1];
 export type MensajeChat = { role: "system" | "user" | "assistant"; content: string };
 
 // $/M tokens para el coste por conversación (jul-2026; verificar en z.ai / anthropic si cambian).
@@ -10,16 +19,17 @@ export const PRECIOS: Record<string, { in: number; out: number }> = {
   "glm-5.2": { in: 1.4, out: 4.4 },
   "glm-5.3": { in: 1.4, out: 4.4 },        // docs.z.ai/guides/overview/pricing, 2026-09-15
   "glm-5.3-flash": { in: 0.15, out: 0.5 },
-  "z-ai/glm-5.2": { in: 1.19, out: 3.74 }, // vía OpenRouter (el ancla); Z.ai directo cobra 1.4/4.4
+  "z-ai/glm-5.2": { in: 1.4, out: 4.4 },   // vía OpenRouter fijado al proveedor Z.AI (PROVEEDOR_OFICIAL), misma tarifa que directo
   "claude-opus-5": { in: 5, out: 25 },     // cerebro Claude nativo: la entrada llega ya en tokens equivalentes (caché)
   "claude-opus-4-8": { in: 5, out: 25 },
   "anthropic/claude-opus-4.8": { in: 5, out: 25 },
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-haiku-4-5": { in: 1, out: 5 },
-  // Cerebros baseline vía OpenRouter (tarifas de openrouter.ai/api/v1/models, 2026-09-01).
+  // Cerebros baseline vía OpenRouter: tarifa del proveedor OFICIAL al que se fija la ruta
+  // (openrouter.ai/api/v1/models/<slug>/endpoints, 2026-10-09).
   "anthropic/claude-opus-5": { in: 5, out: 25 },
   "moonshotai/kimi-k3": { in: 3, out: 15 },
-  "qwen/qwen3.8-max": { in: 2, out: 6 },
+  "qwen/qwen3.8-max-0902": { in: 2, out: 6 }, // `qwen/qwen3.8-max` ya no existe en OpenRouter; este es el id con fecha
   "openai/gpt-5.6-sol": { in: 2, out: 10 },
 };
 
@@ -103,4 +113,14 @@ export async function chatClaude(opts: {
     catch { throw new ErrorLLM(`JSON inválido del modelo (stop_reason=${data.stop_reason}): ${texto.slice(0, 200)}`); }
   }
   return { texto, json, uso: { entrada: data.usage?.input_tokens ?? 0, salida: data.usage?.output_tokens ?? 0 } };
+}
+
+if (import.meta.main) {
+  const { default: assert } = await import("node:assert");
+  assert.equal(proveedorOpenRouter("z-ai/glm-5.2"), "z-ai");
+  assert.equal(proveedorOpenRouter("qwen/qwen3.8-max-0902"), "alibaba");
+  assert.equal(proveedorOpenRouter("mistralai/x"), undefined, "sin proveedor conocido no se fija ruta");
+  for (const slug of ["z-ai/glm-5.2", "anthropic/claude-opus-5", "moonshotai/kimi-k3", "qwen/qwen3.8-max-0902", "openai/gpt-5.6-sol"])
+    assert.ok(PRECIOS[slug] && proveedorOpenRouter(slug), `baseline sin tarifa o sin proveedor: ${slug}`);
+  console.log("llm.ts ok");
 }

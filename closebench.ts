@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { arrancarMocks, type Capturas } from "./lib/mocks.ts";
-import { chatClaude, costeUSD, sumarUso, USO_CERO, type Uso } from "./lib/llm.ts";
+import { chatClaude, costeUSD, sumarUso, USO_CERO, proveedorOpenRouter, type Uso } from "./lib/llm.ts";
 import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/util.ts";
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
 import { cargarDataset, DOMINIOS, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
@@ -86,7 +86,7 @@ const DRY_ESCENARIOS: Escenario[] = [
 const puertoLibre = (): Promise<number> =>
   new Promise((res) => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = (s.address() as any).port; s.close(() => res(p)); }); });
 
-async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: string; token: string; logPath: string; ofertaPath: string; cerebro: { base: string; key: string; modelo: string } }) {
+async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: string; token: string; logPath: string; ofertaPath: string; cerebro: { base: string; key: string; modelo: string; proveedor?: string } }) {
   const log = createWriteStream(opts.logPath);
   const porDefecto = join(RAIZ, "adapters", HTTP ? "http-agent.ts" : "reference-agent.ts");
   const SUT = (process.env.SUT_CMD && process.env.SUT_CMD.trim()) ? process.env.SUT_CMD.trim().split(" ") : ["node", porDefecto];
@@ -99,6 +99,7 @@ async function arrancarAgente(opts: { port: number; mockPort: number; dbPath: st
       GLM_BASE_URL: opts.cerebro.base,
       ZAI_API_KEY: opts.cerebro.key,
       GLM_MODEL: opts.cerebro.modelo,
+      BRAIN_PROVIDER: opts.cerebro.proveedor ?? "",
       KAPSO_BASE_URL: `http://127.0.0.1:${opts.mockPort}/kapso`,
       KAPSO_API_KEY: "bench",
       KAPSO_PHONE_NUMBER_ID: "bench",
@@ -306,7 +307,7 @@ async function main() {
   if (!escenarios.length) { console.error(`No hay escenarios que casen con --solo ${args.solo ?? "*"} --tier ${args.tier ?? "*"}`); process.exit(1); }
 
   // cerebro bajo examen
-  let cerebro: { base: string; key: string; modelo: string; nombre: string };
+  let cerebro: { base: string; key: string; modelo: string; nombre: string; proveedor?: string };
   const mocks = await arrancarMocks(precioLista); // el cerebro dry cobra el precio de lista DEL DOMINIO
   if (DRY) cerebro = { base: `http://127.0.0.1:${mocks.port}/llm`, key: "dry", modelo: "glm-5.2", nombre: "guion-dry" };
   else if (args.brain === "opus" || args.brain!.startsWith("claude-")) {
@@ -327,7 +328,9 @@ async function main() {
     // sigue funcionando, pero sin el caché del camino nativo). Un slug sin tarifa en PRECIOS avisa y
     // reporta coste 0: añádela.
     const slug = args.brain!;
-    cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: slug };
+    const proveedor = proveedorOpenRouter(slug);
+    if (!proveedor) console.warn(`⚠️ ${slug}: sin proveedor oficial en PROVEEDOR_OFICIAL — OpenRouter elegirá ruta y el run no será reproducible`);
+    cerebro = { base: "https://openrouter.ai/api/v1", key, modelo: slug, nombre: proveedor ? `${slug} @${proveedor}` : slug, proveedor };
   } else {
     const key = process.env.ZAI_API_KEY;
     if (!key) { console.error("Falta ZAI_API_KEY en .env"); process.exit(1); }
@@ -513,7 +516,7 @@ async function main() {
     protocolo: args.protocol,
     conformidad: HTTP ? "Closed" : "Open",
     sut: { cmd: process.env.SUT_CMD?.trim() || `(por defecto) adapters/${HTTP ? "http-agent.ts" : "reference-agent.ts"}`, prompt: args.prompt ?? "prompts/reference-sales.md" },
-    modelos: { cerebro: cerebro.modelo, cerebro_base: cerebro.base, comprador: DRY ? "(guion)" : MODELO_COMPRADOR, juez: DRY ? "(guion)" : MODELO_JUEZ },
+    modelos: { cerebro: cerebro.modelo, cerebro_base: cerebro.base, ...(cerebro.proveedor ? { cerebro_proveedor: cerebro.proveedor } : {}), comprador: DRY ? "(guion)" : MODELO_COMPRADOR, juez: DRY ? "(guion)" : MODELO_JUEZ },
     harness: { git: gitSha, node: process.version },
   };
 
