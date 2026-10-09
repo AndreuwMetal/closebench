@@ -58,11 +58,25 @@ Authors and maintainers who also submit agents disclose it. Maintainer-affiliate
 | reference-GLM | `z-ai/glm-5.2` (OpenRouter) | The **anchor** — see below. Routed through OpenRouter like the other five, deliberately: the anchor's whole job is to tell dataset drift apart from everything else, and an anchor on its own provider path confounds the two the moment that provider changes what it serves. The bundled default still runs Z.ai direct (`--brain glm`); the anchor is `--brain z-ai/glm-5.2`. Runs before 2026-09-01 went through Z.ai direct, so the anchor's series has a route change at that date and it is recorded rather than smoothed over. |
 | Opus | `anthropic/claude-opus-5` | Frontier ceiling. **Caveat, stated because it is the one row where the rule bends:** the judge is `claude-opus-4-8`, so this baseline is the only one whose brain shares a vendor and family with its judge. Judge and brain are still different models, but self-preference cannot be ruled out by construction the way it can for the other four — so the row carries the note, and a κ round that covers it is worth more here than anywhere else. |
 | Kimi | `moonshotai/kimi-k3` | |
-| Qwen | `qwen/qwen3.8-max` | |
+| Qwen | `qwen/qwen3.8-max-0902` | Pinned id with date. The policy first named `qwen/qwen3.8-max`, which OpenRouter no longer serves (checked 2026-10-09). |
 | GPT-5.6 Sol | `openai/gpt-5.6-sol` | |
 | **`bad.md` floor** | `glm-5.2` with `prompts/bad.md` | **Published as a baseline, not hidden as a test fixture.** Without a floor, a reader has no idea whether 79% is good. It is also the discrimination control, so publishing it makes the board self-checking: the day an entrant scores below the deliberately bad prompt, something is wrong with the entrant or with the set. |
 
-All six run through OpenRouter (`--brain <slug>`; any OpenRouter slug works, and a slug with no entry in `PRECIOS` warns and reports a cost of 0 instead of inventing one).
+All six run through OpenRouter (`--brain <slug>`; any OpenRouter slug works, and a slug with no entry in `PRECIOS` warns and reports a cost of 0 instead of inventing one). **The route is pinned to the model's own provider** (Z.AI, Moonshot AI, Alibaba, Anthropic, OpenAI — `PROVEEDOR_OFICIAL` in `lib/llm.ts`) with fallbacks off, and the manifest records it as `cerebro_proveedor`. Unpinned, OpenRouter spreads one run across 25–35 providers whose prices differ up to 20× and some of which may serve quantized weights: neither the score nor the cost would be the pinned model's.
+
+**Revision 2026-10-09 — the set that actually runs first.** The table above assumed OpenRouter access; the maintainer has Anthropic and Z.ai keys only, so the first seeded set is what those reach, and every brain runs on its own vendor's API (the official provider, which is what the pinning rule below asks for anyway):
+
+| Baseline | Model id | Route | Note |
+|---|---|---|---|
+| reference-GLM (anchor) | `glm-5.2` | Z.ai direct | Same route as the pre-2026-09-01 series, so the anchor has no route change yet. Moves to `z-ai/glm-5.2` pinned to Z.AI on OpenRouter when that key exists — recorded as a route change, not smoothed over. |
+| Opus | `claude-opus-5-5` | Anthropic API | Replaces `claude-opus-5`: same line, current, cheaper ($4/$20). Shares a vendor with the judge (caveat above). |
+| Sonnet | `claude-sonnet-5-5` | Anthropic API | Shares a vendor with the judge **and** the buyer (`claude-sonnet-5`, a different model). |
+| Haiku | `claude-haiku-5-5` | Anthropic API | Low-cost tier ($0.10/$0.50): shows what reliability costs. |
+| `bad.md` floor | `glm-5.2` + `prompts/bad.md` | Z.ai direct | Unchanged. |
+
+Pending until there is a key for them: Kimi (`moonshotai/kimi-k3`), Qwen (`qwen/qwen3.8-max-0902`), GPT-5.6 Sol (`openai/gpt-5.6-sol`), all via OpenRouter pinned to their own provider; optionally Claude Fable 5.1 (`claude-fable-5-1`) as a ceiling row (~$75 at k = 8).
+
+**Neutrality cost of this set, stated rather than discovered:** three of five brains come from the vendor of the judge and the buyer. Self-preference cannot be ruled out by construction for those rows, so the board flags them, the next κ round prioritises transcripts from Anthropic brains, and adding the non-Anthropic baselines is the first thing more budget buys. Measured eval cost after prompt caching (2026-10-09 smoke runs) is about **$0.03 per conversation**, down from the $0.046 estimated below; the maintainer runbook with current per-baseline costs is [PENDIENTE.md](PENDIENTE.md).
 
 **k = 8.** Not a taste call. At n = 52 and p ≈ 0.79 the binomial standard error is ~5.6 points, so a 95% interval is roughly ±11 points: **two agents within about six scenarios of each other are indistinguishable at k = 1.** That is not a hypothetical — the first `saas` control produced 15/20 against 14/20 and the honest reading was "no difference". Every baseline publishes **pass^1 and pass^8**: pass^1 is capability, pass^8 is reliability, and the distance between them is the most informative number a sales agent has.
 

@@ -1,0 +1,302 @@
+% References for the CloseBench paper.
+% Rule: every entry is cited in docs/RESEARCH.md or docs/METHODOLOGY.md (arXiv ids/URLs taken from there),
+% or is a standard reference with well-known metadata. Fields the author could not confirm carry note = {verify}.
+
+% ---------------------------------------------------------------- agent benchmarks
+@article{yao2024taubench,
+  title   = {$\tau$-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains},
+  author  = {Yao, Shunyu and Shinn, Noah and Razavi, Pedram and Narasimhan, Karthik},
+  journal = {arXiv preprint arXiv:2406.12045},
+  year    = {2024}
+}
+
+@article{barres2025tau2,
+  title   = {$\tau^2$-Bench: Evaluating Conversational Agents in a Dual-Control Environment},
+  author  = {Barres, Victor and Dong, Honghua and Ray, Soham and Si, Xujie and Narasimhan, Karthik},
+  journal = {arXiv preprint arXiv:2506.07982},
+  year    = {2025}
+}
+
+@inproceedings{jimenez2024swebench,
+  title     = {{SWE}-bench: Can Language Models Resolve Real-World {GitHub} Issues?},
+  author    = {Jimenez, Carlos E. and Yang, John and Wettig, Alexander and Yao, Shunyu and Pei, Kexin and Press, Ofir and Narasimhan, Karthik},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  note      = {arXiv:2310.06770}
+}
+
+@misc{openai2024swebenchverified,
+  title        = {Introducing {SWE}-bench Verified},
+  author       = {{OpenAI}},
+  year         = {2024},
+  howpublished = {\url{https://openai.com/index/introducing-swe-bench-verified/}}
+}
+
+@article{zhang2025swebenchlive,
+  title   = {{SWE}-bench Goes Live!},
+  author  = {Zhang, Linghao and others},
+  journal = {arXiv preprint arXiv:2505.23419},
+  year    = {2025},
+  note    = {verify: title and author list}
+}
+
+@article{liang2023helm,
+  title   = {Holistic Evaluation of Language Models},
+  author  = {Liang, Percy and Bommasani, Rishi and Lee, Tony and Tsipras, Dimitris and Soylu, Dilara and Yasunaga, Michihiro and Zhang, Yian and Narayanan, Deepak and Wu, Yuhuai and Kumar, Ananya and others},
+  journal = {Transactions on Machine Learning Research},
+  year    = {2023},
+  note    = {arXiv:2211.09110}
+}
+
+@inproceedings{zhou2024webarena,
+  title     = {{WebArena}: A Realistic Web Environment for Building Autonomous Agents},
+  author    = {Zhou, Shuyan and Xu, Frank F. and Zhu, Hao and Zhou, Xuhui and Lo, Robert and Sridhar, Abishek and Cheng, Xianyi and Ou, Tianyue and Bisk, Yonatan and Fried, Daniel and Alon, Uri and Neubig, Graham},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  note      = {arXiv:2307.13854}
+}
+
+@inproceedings{mialon2024gaia,
+  title     = {{GAIA}: A Benchmark for General {AI} Assistants},
+  author    = {Mialon, Gr{\'e}goire and Fourrier, Cl{\'e}mentine and Swift, Craig and Wolf, Thomas and LeCun, Yann and Scialom, Thomas},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  note      = {arXiv:2311.12983}
+}
+
+@inproceedings{liu2024agentbench,
+  title     = {{AgentBench}: Evaluating {LLMs} as Agents},
+  author    = {Liu, Xiao and others},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  note      = {arXiv:2308.03688}
+}
+
+@article{chen2021codex,
+  title   = {Evaluating Large Language Models Trained on Code},
+  author  = {Chen, Mark and Tworek, Jerry and Jun, Heewoo and Yuan, Qiming and others},
+  journal = {arXiv preprint arXiv:2107.03374},
+  year    = {2021}
+}
+
+% ---------------------------------------------------------------- governance
+@inproceedings{reddi2020mlperf,
+  title     = {{MLPerf} Inference Benchmark},
+  author    = {Reddi, Vijay Janapa and others},
+  booktitle = {ACM/IEEE 47th Annual International Symposium on Computer Architecture (ISCA)},
+  year      = {2020},
+  note      = {arXiv:1911.02549}
+}
+
+@misc{mlcommons2024rules,
+  title        = {{MLPerf} Submission Rules},
+  author       = {{MLCommons}},
+  howpublished = {\url{https://github.com/mlcommons/policies/blob/master/submission_rules.adoc}},
+  note         = {Accessed 2026; living document, verify version/date}
+}
+
+% ---------------------------------------------------------------- LLM-as-judge
+@inproceedings{zheng2023judging,
+  title     = {Judging {LLM}-as-a-Judge with {MT}-Bench and Chatbot Arena},
+  author    = {Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and Lin, Zi and Li, Zhuohan and Li, Dacheng and Xing, Eric P. and Zhang, Hao and Gonzalez, Joseph E. and Stoica, Ion},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
+  year      = {2023},
+  note      = {arXiv:2306.05685}
+}
+
+@article{panickssery2024self,
+  title   = {{LLM} Evaluators Recognize and Favor Their Own Generations},
+  author  = {Panickssery, Arjun and Bowman, Samuel R. and Feng, Shi},
+  journal = {arXiv preprint arXiv:2404.13076},
+  year    = {2024}
+}
+
+@article{verga2024juries,
+  title   = {Replacing Judges with Juries: Evaluating {LLM} Generations with a Panel of Diverse Models},
+  author  = {Verga, Pat and others},
+  journal = {arXiv preprint arXiv:2404.18796},
+  year    = {2024}
+}
+
+% ---------------------------------------------------------------- contamination & gaming
+@article{zhang2024gsm1k,
+  title   = {A Careful Examination of Large Language Model Performance on Grade School Arithmetic},
+  author  = {Zhang, Hugh and others},
+  journal = {arXiv preprint arXiv:2405.00332},
+  year    = {2024}
+}
+
+@article{yang2023rephrased,
+  title   = {Rethinking Benchmark and Contamination for Language Models with Rephrased Samples},
+  author  = {Yang, Shuo and Chiang, Wei-Lin and Zheng, Lianmin and Gonzalez, Joseph E. and Stoica, Ion},
+  journal = {arXiv preprint arXiv:2311.04850},
+  year    = {2023}
+}
+
+@article{white2024livebench,
+  title   = {{LiveBench}: A Challenging, Contamination-Free {LLM} Benchmark},
+  author  = {White, Colin and others},
+  journal = {arXiv preprint arXiv:2406.19314},
+  year    = {2024}
+}
+
+@article{singh2025leaderboard,
+  title   = {The Leaderboard Illusion},
+  author  = {Singh, Shivalika and others},
+  journal = {arXiv preprint arXiv:2504.20879},
+  year    = {2025}
+}
+
+@article{vendrow2025platinum,
+  title   = {Do Large Language Model Benchmarks Test Reliability?},
+  author  = {Vendrow, Joshua and Vendrow, Edward and Beery, Sara and Madry, Aleksander},
+  journal = {arXiv preprint arXiv:2502.03461},
+  year    = {2025}
+}
+
+@article{srivastava2023bigbench,
+  title   = {Beyond the Imitation Game: Quantifying and Extrapolating the Capabilities of Language Models},
+  author  = {Srivastava, Aarohi and others},
+  journal = {Transactions on Machine Learning Research},
+  year    = {2023},
+  note    = {arXiv:2206.04615}
+}
+
+% ---------------------------------------------------------------- negotiation, persuasion, sales
+@inproceedings{he2018decoupling,
+  title     = {Decoupling Strategy and Generation in Negotiation Dialogues},
+  author    = {He, He and Chen, Derek and Balakrishnan, Anusha and Liang, Percy},
+  booktitle = {Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year      = {2018},
+  note      = {arXiv:1808.09637}
+}
+
+@article{xia2024bargaining,
+  title   = {Measuring Bargaining Abilities of {LLMs}: A Benchmark and A Buyer-Enhancement Method},
+  author  = {Xia, Tian and others},
+  journal = {arXiv preprint arXiv:2402.15813},
+  year    = {2024},
+  note    = {verify: author list and final venue}
+}
+
+@inproceedings{bianchi2024negotiationarena,
+  title     = {How Well Can {LLMs} Negotiate? {NegotiationArena} Platform and Analysis},
+  author    = {Bianchi, Federico and Chia, Patrick John and Yuksekgonul, Mert and Tagliabue, Jacopo and Jurafsky, Dan and Zou, James},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year      = {2024},
+  note      = {arXiv:2402.05863}
+}
+
+@misc{mazur2025pact,
+  title        = {{PACT}: a bilateral negotiation benchmark for {LLMs}},
+  author       = {Mazur, Lech},
+  howpublished = {\url{https://github.com/lechmazur/pact}},
+  year         = {2025},
+  note         = {verify: title wording, author and year}
+}
+
+@inproceedings{wang2019persuasion,
+  title     = {Persuasion for Good: Towards a Personalized Persuasive Dialogue System for Social Good},
+  author    = {Wang, Xuewei and Shi, Weiyan and Kim, Richard and Oh, Yoojung and Yang, Sijia and Zhang, Jingwen and Yu, Zhou},
+  booktitle = {Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  year      = {2019}
+}
+
+@misc{durmus2024persuasion,
+  title        = {Measuring the Persuasiveness of Language Models},
+  author       = {Durmus, Esin and Lovitt, Liane and Tamkin, Alex and Ritchie, Stuart and Clark, Jack and Ganguli, Deep},
+  year         = {2024},
+  howpublished = {Anthropic, \url{https://www.anthropic.com/news/measuring-model-persuasiveness}},
+  note         = {verify: author list}
+}
+
+@inproceedings{chiu2022salesbot,
+  title     = {{SalesBot}: Transitioning from Chit-Chat to Task-Oriented Dialogues},
+  author    = {Chiu, Ssu and Li, Maolin and Lin, Yen-Ting and Chen, Yun-Nung},
+  booktitle = {Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  year      = {2022}
+}
+
+@inproceedings{kran2025darkbench,
+  title     = {{DarkBench}: Benchmarking Dark Patterns in Large Language Models},
+  author    = {Kran, Esben and others},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2025},
+  note      = {verify: author list and venue}
+}
+
+@article{bakhtin2022cicero,
+  title   = {Human-level play in the game of {Diplomacy} by combining language models with strategic reasoning},
+  author  = {{Meta Fundamental AI Research Diplomacy Team (FAIR)} and Bakhtin, Anton and others},
+  journal = {Science},
+  volume  = {378},
+  number  = {6624},
+  pages   = {1067--1074},
+  year    = {2022}
+}
+
+@article{simcustomers2026,
+  title   = {Simulated Customers Never Walk Away},
+  author  = {{Authors not recorded in repo}},
+  journal = {arXiv preprint arXiv:2606.20708},
+  year    = {2026},
+  note    = {verify: title, authors and year -- cited by id only in docs/RESEARCH.md}
+}
+
+@article{salessim2026,
+  title   = {{SalesSim}},
+  author  = {{Authors not recorded in repo}},
+  journal = {arXiv preprint arXiv:2605.08334},
+  year    = {2026},
+  note    = {verify: full title, authors and year -- cited by id only in docs/RESEARCH.md}
+}
+
+% ---------------------------------------------------------------- agreement statistics
+@article{cohen1960kappa,
+  title   = {A Coefficient of Agreement for Nominal Scales},
+  author  = {Cohen, Jacob},
+  journal = {Educational and Psychological Measurement},
+  volume  = {20},
+  number  = {1},
+  pages   = {37--46},
+  year    = {1960}
+}
+
+@article{landis1977kappa,
+  title   = {The Measurement of Observer Agreement for Categorical Data},
+  author  = {Landis, J. Richard and Koch, Gary G.},
+  journal = {Biometrics},
+  volume  = {33},
+  number  = {1},
+  pages   = {159--174},
+  year    = {1977}
+}
+
+% ---------------------------------------------------------------- selling method & regulation
+@book{rackham1988spin,
+  title     = {{SPIN} Selling},
+  author    = {Rackham, Neil},
+  publisher = {McGraw-Hill},
+  year      = {1988}
+}
+
+@book{voss2016never,
+  title     = {Never Split the Difference: Negotiating As If Your Life Depended On It},
+  author    = {Voss, Chris and Raz, Tahl},
+  publisher = {Harper Business},
+  year      = {2016}
+}
+
+@book{cialdini1984influence,
+  title     = {Influence: The Psychology of Persuasion},
+  author    = {Cialdini, Robert B.},
+  publisher = {William Morrow},
+  year      = {1984}
+}
+
+@misc{euaiact2024,
+  title        = {Regulation ({EU}) 2024/1689 laying down harmonised rules on artificial intelligence (Artificial Intelligence Act)},
+  author       = {{European Parliament and Council of the European Union}},
+  howpublished = {Official Journal of the European Union, L series},
+  year         = {2024}
+}

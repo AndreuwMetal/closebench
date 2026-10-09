@@ -170,7 +170,7 @@ The runner waits for `GET /health` for **60 s** by default, then gives up. Impor
 
 ## Conformance levels
 
-- **Closed** (`--protocol http`) — buyer, policy, and toolset are fixed by CloseBench. The only variable is your agent, so scores compare agents. This is the default and the one that belongs on a leaderboard.
+- **Closed** (`--protocol http`) — buyer, policy, and toolset are fixed by CloseBench. The only variable is your agent, so scores compare agents directly. Note the CLI default is `--protocol webhook` (Open): the bundled reference agent and every published run use it; pass `--protocol http` for Closed.
 - **Open** (`--protocol webhook` with your own scaffolding, retrieval, fine-tune, or tools) — more freedom, less comparability.
 
 They are **scored separately and never mixed**, following MLPerf's Closed/Open split. Every report stamps the protocol it ran under.

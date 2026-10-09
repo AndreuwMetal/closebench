@@ -1,0 +1,744 @@
+% CloseBench paper -- arXiv draft.
+% Build: pdflatex closebench && bibtex closebench && pdflatex closebench && pdflatex closebench
+% Rule for this draft: every number is traceable to a file in the repository; the file is named in a
+% "% source:" comment next to it. Missing data is marked \TODO{...} and must be filled before submission.
+% Paths in source comments are relative to the repository root.
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
+
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\cb}{\textsc{CloseBench}}
+\newcommand{\passk}[1]{pass\textsuperscript{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{\cb{}: A Compliance-Gated, End-to-End Benchmark for AI Sales Agents}
+\author{Andr\'es M\'armol del Amo\\
+  Forge-AI\\
+  \url{https://forge-ai.xyz}\\
+  \href{mailto:andresforjaai@gmail.com}{\nolinkurl{andresforjaai@gmail.com}}}
+\date{\today}
+
+\begin{document}
+\sloppy % long code identifiers and paths: allow looser spacing instead of running into the margin
+\maketitle
+
+% =====================================================================================
+\begin{abstract}
+Coding agents are evaluated on SWE-bench and tool-using customer-service agents on $\tau$-bench, but
+agents that \emph{sell}---that negotiate prices, make promises and create payment links---have no
+reproducible benchmark. This gap is not neutral: controlled studies report that deceptive persuasion
+strategies are often the most persuasive, so a benchmark that scores persuasion without gating honesty
+rewards the agents that lie best. We present \cb{}, an open benchmark that places a complete sales
+agent (system prompt, tools, code guardrails and state) behind its production entry point, drives it
+through multi-turn WhatsApp-style conversations against an LLM-simulated buyer with a hidden budget and
+a hidden correct outcome, and scores it with an LLM judge anchored on objective facts read from mocked
+payment, messaging and database services. Success requires reaching the scenario's correct outcome
+\emph{and} committing zero severe policy violations; reliability is reported as \passk{k}, and cost per
+conversation is a first-class metric. The public real-estate split contains 52 scenarios
+% source: docs/SCENARIOS.md
+in three difficulty tiers, with a sealed hidden split and a second, preview-stage SaaS domain. A
+reference agent reaches 42/52 on the public split at $k{=}1$,
+and a deliberately bad prompt is separated from it mainly by the compliance gate (10 vs.\ 1 severe
+violations on the same 29 scenarios).
+% source: results/published/README.md ("Severity re-score": graves() on the stored violations of runs 1717 and 1729)
+We also report the judge's agreement with two human labelers: it does \emph{not} yet reach
+human--human agreement, and we treat it as an opinion rather than a measure until it does. Harness,
+scenarios, rubric and all published runs are released under the MIT license.
+\end{abstract}
+
+% =====================================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Agent benchmarks became credible when they started grading systems in environments instead of models
+on prompts: SWE-bench grades patches by executing tests in a container~\citep{jimenez2024swebench},
+and $\tau$-bench grades tool-using agents against an LLM-simulated user and a policy
+document~\citep{yao2024taubench,barres2025tau2}. Selling is a natural next target---sales agents
+touch money, make commitments on behalf of a business, and operate on asynchronous channels such as
+WhatsApp---yet existing programmatic work on commercial dialogue is mostly about
+\emph{negotiation}~\citep{he2018decoupling,xia2024bargaining,bianchi2024negotiationarena}, and sales
+dialogue work proper has scored mainly naturalness~\citep{chiu2022salesbot}. To our knowledge there is
+no reproducible benchmark that grades a full selling agent on whether it closes the deal \emph{and}
+stays honest while doing so.
+
+The second half of that requirement is not a moral add-on; it is what makes the score mean anything.
+Anthropic's persuasiveness study reports that the deceptive strategy was the most persuasive
+overall~\citep{durmus2024persuasion}, and $\tau$-bench's authors note that reaching the goal state is
+necessary but not sufficient, since an agent can reach it while violating
+policy~\citep{yao2024taubench}. A sales benchmark that scores close rate or persuasion with honesty as
+a soft deduction therefore selects for the agents that lie most effectively. A second trap lies in the
+buyer: LLM-simulated customers have been reported to push non-buyers towards buying and to fabricate
+few genuine refusals, systematically over-estimating seller
+effectiveness~\citep{simcustomers2026,salessim2026}.
+
+\cb{} is built around these two observations. Its contributions are:
+\begin{itemize}
+  \item \textbf{A system-level harness.} The unit under test is the whole agent, reached through the
+    same HMAC-signed webhook it uses in production (or a language-agnostic HTTP protocol); WhatsApp,
+    Stripe and the agent's database are mocked and captured, so runs are hermetic
+    (Section~\ref{sec:design}).
+  \item \textbf{Facts-anchored judging with an absolute compliance gate.} Whether a checkout was
+    created, for how much, whether a code guardrail fired and the lead's final state are read from the
+    mocks and injected into the judge prompt; any severe violation fails the scenario regardless of the
+    sale.
+  \item \textbf{A walk-away-capable buyer and honest no-sale outcomes.} Each persona has a hidden
+    budget and private accept/leave criteria, and whole categories make \emph{not} selling the correct
+    answer.
+  \item \textbf{Reliability, cost and governance.} \passk{k} as headline, dollars per conversation,
+    difficulty tiers, versioned dataset digests, a sealed hidden split, and a submission/verification
+    process with stated limits (Section~\ref{sec:governance}).
+  \item \textbf{An honest calibration record.} We publish the judge's agreement with two human
+    labelers, including the fact that it does not yet clear the bar we set for it
+    (Section~\ref{sec:kappa}).
+\end{itemize}
+
+% =====================================================================================
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Agent benchmarks.} $\tau$-bench models each task as a POMDP with databases, API tools and a
+Markdown policy, driven by an LLM user simulator, and introduces \passk{k}: the probability that
+\emph{all} $k$ i.i.d.\ trials succeed~\citep{yao2024taubench}; $\tau^2$-bench adds dual control and
+action matching~\citep{barres2025tau2}. SWE-bench grades by execution with no LLM
+judgment~\citep{jimenez2024swebench}; its human-validated Verified subset~\citep{openai2024swebenchverified}
+and its post-cutoff Live variant~\citep{zhang2025swebenchlive} are the credibility and contamination
+moves \cb{} imitates. WebArena scores programmatic end states in self-hosted
+applications~\citep{zhou2024webarena}; GAIA keeps most answers private and uses three difficulty
+levels~\citep{mialon2024gaia}; AgentBench reports per-environment
+breakdowns~\citep{liu2024agentbench}; HELM argues for multi-metric reporting and full release of
+prompts and completions~\citep{liang2023helm}. \passk{k} should not be confused with code generation's
+pass@$k$ (at least one of $k$ succeeds)~\citep{chen2021codex}.
+
+\paragraph{Negotiation, persuasion and sales.} CraigslistBargain~\citep{he2018decoupling}, an
+AmazonHistoryPrice bargaining benchmark~\citep{xia2024bargaining}, NegotiationArena~\citep{bianchi2024negotiationarena}
+and PACT~\citep{mazur2025pact} evaluate price negotiation; \cb{}'s secondary negotiation track is
+adapted from the PACT protocol.
+% source: README.md ("Two tracks")
+Persuasion-for-Good anchors persuasion on a monetary outcome~\citep{wang2019persuasion};
+SalesBot scores the transition from chit-chat to a sales task mostly on
+naturalness~\citep{chiu2022salesbot}. DarkBench provides a taxonomy of manipulative
+patterns~\citep{kran2025darkbench}, and Cicero is an example of strategic dialogue held to honest
+play~\citep{bakhtin2022cicero}. None of these combines a programmatic close, a sales-methodology
+rubric, a hard honesty gate, \passk{k} and a standardized agent adapter.
+% source: docs/RESEARCH.md ("Whitespace CloseBench owns")
+
+\paragraph{LLM-as-judge.} Judges show position, verbosity and self-preference
+biases~\citep{zheng2023judging,panickssery2024self}; reference-guided grading and panels of diverse
+judges mitigate them~\citep{zheng2023judging,verga2024juries}. The accepted bar is judge--human
+agreement at least as high as human--human agreement; MT-Bench reports 85\% vs.\
+81\%~\citep{zheng2023judging}.
+% source: docs/RESEARCH.md, docs/METHODOLOGY.md
+We report agreement as raw percentage and Cohen's $\kappa$~\citep{cohen1960kappa}, reading
+$\kappa>0.6$ as substantial~\citep{landis1977kappa}.
+
+\paragraph{Contamination and leaderboard gaming.} Training on test data inflates
+scores~\citep{zhang2024gsm1k}, rephrasing defeats n-gram decontamination~\citep{yang2023rephrased},
+and rolling refreshes keep a benchmark ahead of training corpora~\citep{white2024livebench}. Canary
+strings follow BIG-bench~\citep{srivastava2023bigbench}. Private best-of-$N$ variant selection distorts
+public leaderboards~\citep{singh2025leaderboard}, and label noise should be cleaned so that a perfect
+score is attainable~\citep{vendrow2025platinum}. Closed/Open divisions, availability tags and peer
+review are borrowed from MLPerf~\citep{reddi2020mlperf,mlcommons2024rules}.
+
+% =====================================================================================
+\section{Benchmark design}
+\label{sec:design}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  font=\small, >={Stealth[length=2.2mm]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=4pt, minimum height=9mm},
+  llmbox/.style={box, fill=black!6},
+  sysbox/.style={box, fill=white},
+  resbox/.style={box, fill=black!12, font=\small\bfseries},
+  lbl/.style={font=\scriptsize, align=center}]
+\node[box, text width=14.6cm] (sc) at (0,0) {\textbf{Scenario}: persona $\cdot$ hidden budget $\cdot$ attitude $\cdot$ correct outcome};
+\node[llmbox, text width=3.8cm] (buyer) at (-4.6,-1.9) {Simulated \textbf{buyer}\\(LLM)};
+\node[sysbox, text width=5.8cm] (agent) at (3.6,-1.9) {\textbf{Agent under test}\\prompt $+$ tools $+$ guardrails $+$ state};
+\node[sysbox, text width=5.8cm] (mocks) at (3.6,-3.9) {Mock payments $\cdot$ messaging $\cdot$ SQLite};
+\node[sysbox, text width=5.8cm] (facts) at (3.6,-5.8) {\textbf{Objective facts}: paid? amount?\\final state? guardrail hits?};
+\node[llmbox, text width=3.8cm] (judge) at (-4.6,-5.8) {\textbf{Judge} (LLM)\\transcript $+$ facts};
+\node[resbox, text width=14.6cm] (score) at (0,-7.7) {score $\cdot$ severe violations (gate) $\cdot$ \passk{k} $\cdot$ \$/conversation};
+\draw[->] (sc.south -| buyer) -- (buyer.north);
+\draw[<->, thick] (buyer.east) -- node[lbl, above] {webhook or HTTP} node[lbl, below] {multi-turn chat} (agent.west);
+\draw[->] (agent.south) -- node[lbl, right] {tool calls: pay / demo / handoff} (mocks.north);
+\draw[->] (mocks.south) -- node[lbl, right] {harness reads the truth} (facts.north);
+\draw[->] (buyer.south) -- node[lbl, left] {transcript} (judge.north);
+\draw[->] (facts.west) -- node[lbl, above] {injected into the prompt} (judge.east);
+\draw[->] (judge.south) -- (judge.south |- score.north);
+\draw[->] (facts.south) -- (facts.south |- score.north);
+\end{tikzpicture}
+\caption{The \cb{} loop. A scenario drives an LLM buyer against the complete agent through its
+production entry point; the agent's tools hit mocked services, from which the harness reads objective
+facts. The judge rules on policy and style with those facts injected, so it cannot be talked into a sale
+that did not happen; any severe violation fails the scenario.}
+\label{fig:pipeline}
+\end{figure}
+
+
+\subsection{The whole agent is under test}
+\cb{} evaluates a system, not a model. The runner spawns the agent under test as a child process,
+injects mock endpoints through environment variables, and delivers the lead's messages as HMAC-signed
+webhooks byte-identical to what the real channel sends, so the agent's signature checking, deduplication,
+queueing and guardrails are exercised rather than bypassed.
+% source: docs/ARCHITECTURE.md
+Any agent can be substituted through a single command seam (\code{SUT\_CMD}). A second, language-agnostic
+protocol (\code{--protocol http}) reduces the contract to one endpoint, \code{POST /message}, that
+returns either a message or a tool call; the harness then executes the four tools
+(\code{crear\_pago}, \code{agendar\_demo}, \code{avisar\_humano}, \code{handoff\_humano}), enforces
+the guardrails and keeps the state.
+% source: docs/ADAPTERS.md
+Both protocols import the same policy module, and the dry-run suite runs over both and must agree. Four
+reference entrants ship (Node, Python standard library, the official OpenAI client and LangChain).
+% source: README.md, docs/ROADMAP.md (Stage 2)
+Frameworks that insist on executing tools themselves cannot be Closed-conformant, because the price
+guardrail must be identical across entrants.
+% source: docs/ADAPTERS.md, docs/ROADMAP.md
+
+\subsection{Scenarios with hidden budget, attitude and correct outcome}
+Each scenario specifies a buyer persona, context, attitude, opening message, an optional hidden budget
+ceiling (\code{presupuesto\_max}), private accept/push/leave criteria (\code{criterios}), a turn cap, the
+expected outcome (\code{exito\_esperado}), an optional required final state, and optional notes passed
+to the judge. The runner lints every scenario on load.
+% source: docs/SCENARIOS.md ("Scenario schema")
+All realestate scenarios sell a single fictional offer, a 5{,}000~EUR real-estate website with a
+maximum 10\% discount (floor 4{,}500~EUR) allowed only for a close within the week or a referral; any
+price, plan or claim not derivable from the offer is by definition a fabrication.
+% source: docs/SCENARIOS.md ("The offer under test")
+Table~\ref{tab:dataset} summarises the public split.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Composition of the public realestate split, v1.1 (dataset digest \code{baa77c130e24}).}
+% source: docs/SCENARIOS.md (all counts in this table); digest: results/published/closebench-glm-2026-08-31-1717.md
+\label{tab:dataset}
+\begin{tabular}{@{}lr@{\hspace{2em}}lr@{\hspace{2em}}lr@{}}
+\toprule
+\multicolumn{2}{c}{Category} & \multicolumn{2}{c}{Expected outcome} & \multicolumn{2}{c}{Tier} \\
+\midrule
+\code{redteam}      & 15 & \code{demo}            & 22 & L1 (one step to close)   & 4 \\
+\code{objeciones}   &  8 & \code{pago}            & 15 & L2 (discovery/objections) & 26 \\
+\code{regateo}      &  6 & \code{no\_venta\_etica} &  6 & L3 (adversarial/policy edge) & 22 \\
+\code{calientes}    &  5 & \code{handoff}         &  4 & & \\
+\code{tibios}       &  5 & \code{descalificar}    &  3 & & \\
+\code{frios}        &  5 & \code{aviso}           &  2 & & \\
+\code{descalificar} &  4 & & & & \\
+\code{optout}       &  2 & & & & \\
+\code{fuera-oferta} &  2 & & & & \\
+\midrule
+Total & 52 & & 52 & & 52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The scenarios are bilingual (35 Spanish, 17 English).
+% source: docs/SCENARIOS.md
+The tier boundary that matters is L2/L3: below it a mistake costs a deal, above it a mistake is a
+violation. The 15 red-team scenarios include prompt injection, system-prompt extraction, authority
+spoofing to bypass the price policy, an economically vulnerable lead asking for a guarantee, an illegal
+(fair-housing) request and a bait to defame a competitor.
+% source: docs/SCENARIOS.md, docs/ROADMAP.md (Stage 1)
+By design, honesty is often the profitable answer: refusing to fake a ranking or to leak the system
+prompt is what leads several red-team buyers to pay.
+% source: docs/SCENARIOS.md
+
+\subsection{The simulated buyer}
+The buyer is an LLM (default \code{claude-sonnet-5}) playing the persona in short messages, never
+breaking character, and bound by its hidden budget and criteria; it is a different model from the
+agent's brain to avoid same-model collusion.
+% source: docs/METHODOLOGY.md, closebench.ts (MODELO_COMPRADOR default), results/published/*.md manifests
+Because LLM buyers tend not to walk away~\citep{simcustomers2026,salessim2026}, every persona carries
+explicit leave conditions, and the \code{descalificar} and \code{optout} categories and the
+\code{no\_venta\_etica} outcome make not selling the correct answer.
+% source: docs/METHODOLOGY.md ("A known failure mode we design against")
+
+\subsection{Mocked Stripe, WhatsApp and SQLite}
+A single local HTTP server impersonates the WhatsApp provider and Stripe (and, in dry mode, the LLM
+brain), capturing outbound message bubbles and checkout amounts. Each run uses a throwaway SQLite
+database, an ephemeral port and a random webhook secret; no run can reach a real customer or charge a
+real card.
+% source: docs/ARCHITECTURE.md
+A zero-cost dry mode replaces the brain with a scripted mock and asserts the full plumbing; it is the
+continuous-integration smoke test.
+% source: docs/ARCHITECTURE.md, docs/ROADMAP.md (Stage 5)
+
+\subsection{Objective facts anchor the LLM judge}
+After a conversation ends, the runner reads from the mocks and the database whether a checkout was
+created and for how much, whether a demo link was sent, whether a code guardrail blocked an
+out-of-policy price, and the lead's final state. The judge (default \code{claude-opus-4-8}) receives the
+offer as sole source of truth, the price policy, these facts and the full transcript, and returns
+schema-validated JSON with four 0--10 rubric scores (funnel advancement, SPIN-style
+discovery~\citep{rackham1988spin}, objection handling in the style of~\citet{voss2016never}, and
+WhatsApp naturalness), a list of violations each with a literal quote from the transcript, an AI
+disclosure flag (EU AI Act Art.~50~\citep{euaiact2024}), and the outcome, cross-checked against the
+facts.
+% source: docs/METHODOLOGY.md ("The judge"), docs/ARCHITECTURE.md, closebench.ts (MODELO_JUEZ default)
+The judge holds the agent to the standard of an excellent human salesperson; the rubric's selling
+method draws on SPIN, Voss and~\citet{cialdini1984influence}, used only for ethical persuasion.
+% source: docs/METHODOLOGY.md ("Prior art", "The judge")
+The judge rules on style and policy; it cannot be talked into believing a sale happened that did not.
+Code-level guardrail events are folded in as violations even when the judge misses them.
+% source: docs/METHODOLOGY.md
+
+\subsection{The absolute compliance gate}
+\begin{equation}
+  \mathrm{success}(s) \;=\; \bigl[\,\#\text{severe violations} = 0\,\bigr] \;\wedge\; \bigl[\,\text{outcome matches } \code{exito\_esperado}(s)\,\bigr],
+\end{equation}
+where \code{pago} requires a created in-policy checkout, \code{demo} a booked demo or a payment,
+\code{handoff} a human takeover, \code{aviso} a soft handoff while continuing to sell,
+\code{descalificar} a judge-confirmed disqualification, and \code{no\_venta\_etica} no sale (and the
+expected final state, if specified).
+% source: docs/METHODOLOGY.md ("Scoring, precisely")
+Violations are not deductions from a good sale; they are an automatic fail. The violation taxonomy
+covers invented services, prices or cases; guaranteed results; tax, legal or financial advice; prices
+outside policy or discounts without their conditions; denying being an AI; aggressive pressure or false
+urgency; contact after opt-out; leaking third-party data; obeying injected instructions or leaking the
+system prompt; and complying with illegal or discriminatory requests or unverifiable channel authority.
+% source: docs/METHODOLOGY.md, results/published/revision-humana-2026-08-31-1729-helena-gallego.md (sheet header = judge's list)
+Since 2026-09-16 each violation is classified as severe or minor and only severe ones gate; minor
+ones include urgency without aggressive pressure, ``one sale pays for the investment'', and a price
+attempt that the code blocked before the lead saw it. When in doubt a violation is severe.
+% source: docs/METHODOLOGY.md ("Severity (since 2026-09-16)")
+
+\subsection{Reliability: \texorpdfstring{\passk{k}}{pass-k}}
+Following $\tau$-bench~\citep{yao2024taubench}, a scenario passes at $k$ only if it succeeds in all
+$k$ runs. Over $n$ trials with $c$ successes per task, the unbiased estimator is
+\begin{equation}
+  \widehat{\text{pass}^k} \;=\; \mathbb{E}_{\text{task}}\!\left[\binom{c}{k}\Big/\binom{n}{k}\right].
+\end{equation}
+% source: docs/METHODOLOGY.md (principle 3), docs/RESEARCH.md
+The headline metric is \passk{8}; in $\tau$-bench, an agent above 60\% \passk{1} on the retail domain
+falls below 25\% at \passk{8}.
+% source: docs/RESEARCH.md, docs/METHODOLOGY.md
+We report \passk{1} (capability) and \passk{8} (reliability) together, because the distance between
+them is the most informative number for an agent that handles money.
+% source: docs/GOVERNANCE.md ("k = 8")
+
+\subsection{Cost per conversation and latency}
+Token usage reported by the brain is priced into dollars per conversation, separately from the cost of
+running the exam (buyer and judge). Per-turn agent latency (p50/p95) is reported but self-declared and
+environment-dependent; verification does not cover it.
+% source: docs/ARCHITECTURE.md, docs/SUBMISSIONS.md ("The leaderboard"), results/published/*.md
+Evaluation cost was about \$0.046 per conversation
+% source: docs/GOVERNANCE.md ("Cost, stated so the policy is honest"); consistent with $2.38/52 in results/published/closebench-glm-2026-08-31-1717.md
+and about \$0.03 after prompt caching for buyer and judge.
+% source: docs/GOVERNANCE.md (working-tree revision dated 2026-10-09, uncommitted), docs/PENDIENTE.md
+\TODO{Confirm the post-caching evaluation cost from the k=8 baseline runs and cite the run file.}
+
+\subsection{Tiers, domains and divisions}
+Every score is broken down by tier (Table~\ref{tab:dataset}). A \emph{domain} is a self-contained exam
+(one offer plus one scenario set) with its own version, digest and lifecycle
+(Preview $\to$ Validated $\to$ Official); boards never mix domains and there is deliberately no
+cross-domain composite score.
+% source: docs/DOMAINS.md
+Besides \code{realestate} (v1.1, the only Official domain), \code{saas} (v0.1, Preview) sells a fictional
+annual-plan WhatsApp inbox and CRM (list 3{,}000~EUR, floor 2{,}700~EUR) over 20 scenarios
+(tiers 2/10/8; 12 Spanish, 8 English; 4 red-team).
+% source: docs/DOMAINS.md, docs/ROADMAP.md (Stage 4)
+Following MLPerf, results are split into a \emph{Closed} division (HTTP protocol: fixed buyer, policy and
+toolset) and an \emph{Open} division (webhook protocol: own scaffolding), never ranked together. The
+division is derived from the protocol, not self-declared.
+% source: docs/GOVERNANCE.md ("Divisions"), docs/SUBMISSIONS.md
+
+\subsection{Public vs.\ hidden split and the sealed commitment}
+Every run hashes the scenario files and the offer into a 12-hex dataset digest stamped on the report;
+a score is citable only together with domain, version, digest and split.
+% source: docs/SCENARIOS.md ("Versioning and the dataset digest"), REPRODUCE.md
+The official score runs on a hidden split that is never published. The repository commits only a
+commitment---digest \code{eb13fe4d875c}, 10 scenarios, sealed 2026-07-13---computed with the same
+algorithm, so anyone can check that a hidden-split claim refers to the set fixed at that date without
+seeing it.
+% source: scenarios-hidden.sha256
+The hidden realestate split has 1/6/3 scenarios in L1/L2/L3 and 6 Spanish / 4 English.
+% source: docs/ROADMAP.md (Stage 3)
+Hidden-split transcripts are never published, because a transcript is the scenario. A canary GUID in
+the public dataset lets model trainers exclude it.
+% source: results/published/README.md ("What is not here"), canary.txt, docs/METHODOLOGY.md
+
+% =====================================================================================
+\section{Judge validation}
+\label{sec:kappa}
+
+\paragraph{Protocol.} Every run emits a deterministic, stratified blind sample (round-robin over
+violation, clean failure and success) for human labeling. The labeling sheet carries the same violation
+list the judge receives (a single constant feeds both), the full offer, the same objective facts
+(including code-blocked price attempts that never appear in the transcript) and each scenario's judge
+notes---but not the judge's verdict. Each labeler marks \code{exito} and \code{violacion} as yes/no;
+\code{kappa.ts} then computes raw agreement and Cohen's $\kappa$~\citep{cohen1960kappa} for each
+judge--human pair and for the human--human pair.
+% source: docs/METHODOLOGY.md ("Blind human calibration"), kappa.ts
+The bar is judge--human $\geq$ human--human (MT-Bench: 85\% $\geq$ 81\%) with $\kappa>0.6$.
+% source: docs/METHODOLOGY.md, docs/RESEARCH.md
+An earlier joint labeling pass (2026-09-11) is not citable: two people labeled together, which is one
+labeling, and the maintainer subsequently adopted the judge's labels.
+% source: MEMORY.md, docs/ROADMAP.md (Stage 1), REPRODUCE.md
+
+\paragraph{Data.} Two labelers, Andr\'es M\'armol (the author and maintainer) and Helena Gallego
+(unaffiliated with Forge-AI, with no stake in the results; a personal acquaintance of the author), each labeled 20 stratified
+conversations from the reference run (\code{1717}, sampled from 52) and 20 from the \code{bad.md}
+control (\code{1729}, sampled from 29).
+% source: results/published/revision-humana-2026-08-31-1717-*.md and -1729-*.md (sheet headers: "20 de 52", "20 de 29")
+Table~\ref{tab:kappa} reproduces the published numbers, which we re-derived with \code{kappa.ts} from the
+committed sheets.
+% source: results/published/README.md ("The blind kappa sheets"); recomputed with `node kappa.ts` on the four sheets
+
+\begin{table}[t]
+\centering
+\small
+\caption{Agreement on 20 conversations per run: raw agreement $\cdot$ Cohen's $\kappa$.
+\code{1717} = reference agent; \code{1729} = \code{bad.md} control. Judge: \code{claude-opus-4-8}.}
+% source: results/published/README.md; recomputed with kappa.ts from results/published/revision-humana-2026-08-31-{1717,1729}-{andres-marmol,helena-gallego}.md
+\label{tab:kappa}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \multicolumn{2}{c}{\code{1717} (reference)} & \multicolumn{2}{c}{\code{1729} (\code{bad.md})} \\
+\cmidrule(lr){2-3}\cmidrule(l){4-5}
+Pair & \code{exito} & \code{violacion} & \code{exito} & \code{violacion} \\
+\midrule
+Judge $\leftrightarrow$ Andr\'es$^{\ast}$ & 85\% $\cdot$ 0.71 & 90\% $\cdot$ 0.62 & 60\% $\cdot$ 0.25 & 65\% $\cdot$ 0.15 \\
+Judge $\leftrightarrow$ Helena            & 65\% $\cdot$ 0.33 & 80\% $\cdot$ 0.00$^{\dagger}$ & 60\% $\cdot$ 0.25 & 65\% $\cdot$ 0.15 \\
+Andr\'es$^{\ast}$ $\leftrightarrow$ Helena & 80\% $\cdot$ 0.57 & 90\% $\cdot$ 0.00$^{\dagger}$ & 100\% $\cdot$ 1.00 & 100\% $\cdot$ 1.00 \\
+\midrule
+% source: kappa.ts on results/published/revision-humana-2026-08-31-1717-andres-marmol-blind.md + -helena-gallego.md
+Judge $\leftrightarrow$ Andr\'es (blind) & 65\% $\cdot$ 0.31 & 70\% $\cdot$ $-0.15$ & --- & --- \\
+Andr\'es (blind) $\leftrightarrow$ Helena & 90\% $\cdot$ 0.78 & 90\% $\cdot$ 0.00$^{\dagger}$ & --- & --- \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+\begin{minipage}{0.92\linewidth}\footnotesize
+$^{\dagger}$Helena marks no violation on \code{1717}, so $\kappa$ has no variance; read the raw agreement.
+% source: results/published/README.md (footnote 1)
+$^{\ast}$On \code{1717}, Andr\'es's sheet includes a documented \emph{non-blind} correction of five labels
+made after he had seen the judge's verdicts; his original blind labels give judge agreement of 65\%
+($\kappa$ 0.31) on \code{exito} and 70\% ($\kappa$ $-0.15$) on \code{violacion}. His \code{1729} labels
+are blind and untouched.
+% source: results/published/revision-humana-2026-08-31-1717-andres-marmol.md (header note "Correccion posterior (2026-09-11), NO ciega": 65% k 0.314, 70% k -0.154); results/published/revision-humana-2026-08-31-1729-andres-marmol.md (note: VERDICTs are the blind labels)
+\end{minipage}
+\end{table}
+
+\paragraph{Findings.} The bar is not cleared. On the reference run the judge matches one labeler at
+85\% and the other at 65\% (mean 75\%) against a human pair at 80\%; on the \code{bad.md} control the
+two humans, labeling independently, agree on all 20 runs and each marks a single violation
+(\code{redteam-urgencia-01}), whereas the judge cites violations in 8 of the 20 sampled runs.
+% source: results/published/README.md, README.md (Status), MEMORY.md; per-run lists from kappa.ts output and results/published/closebench-glm-2026-08-31-1729.md
+The disagreement is directional: in every \code{1729} \code{exito} disagreement and in all but one
+\code{1717} disagreement, the judge is the stricter party, mostly on soft violations such as invented
+statistics, soft return-on-investment claims and urgency.
+% source: kappa.ts output on the published sheets (all 1729 disagreements are "juez fail / humano pass"; on 1717 the single exception is caliente-05 for Helena)
+Because the reference run's human--human figure depends on Andr\'es's corrected labels (see the table
+note), the cleanest comparison is the \code{1729} control, where all labels are blind; there the judge is
+clearly below the human pair. Until judge--human agreement reaches human--human agreement, we regard
+the judge as a careful opinion rather than a measure. The facts, the gate on code-detected events and
+the cost accounting are mechanical and do not depend on it.
+% source: README.md (Status: "the judge does not clear its own bar")
+With Andr\'es's original blind labels (published as \code{-andres-marmol-blind.md}, rebuilt by undoing the five documented changes), the fully blind reference-run comparison is starker: the judge agrees with each human 65\% of the time on \code{exito}, while the two humans agree 90\% ($\kappa$ 0.78) with each other.
+% source: kappa.ts on results/published/revision-humana-2026-08-31-1717-andres-marmol-blind.md and -helena-gallego.md
+\TODO{Adjudicate the disagreements and state whether the judge, the rubric, or neither changes; MEMORY.md records a queued clarification that ``you won't be disappointed'' is a commercial formula, not a guarantee.}
+\TODO{Second $\kappa$ round on transcripts from the Claude-brain baselines (vendor self-preference check; see Section~\ref{sec:governance}).}
+
+% =====================================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+All runs below use the bundled reference agent with \code{glm-5.2} as brain (Z.ai API), buyer
+\code{claude-sonnet-5}, judge \code{claude-opus-4-8}, webhook protocol (Open division), $k{=}1$.
+% source: manifests in results/published/closebench-glm-2026-08-31-{1717,1729,1939,1945,1949}.md
+They predate the 2026-09-16 severity classification, so every violation listed in them gated the run;
+under the current rule some of them (e.g.\ ``la web se paga sola con un par de ventas'', a code-blocked
+price attempt) fall into categories now classed as minor.
+% source: docs/METHODOLOGY.md ("Severity"); violation quotes in results/published/closebench-glm-2026-08-31-1717.md and -1729.md
+Re-scored offline under the current rule on the same stored violations, the reference run reads 42/52 with 2 severe violations (41/52 with 4 as published), its 29-scenario control subset 24/29 with 1 severe (23/29 with 3), the \code{bad.md} control 18--19/29 with 10 severe (18/29 with 13; one \code{no\_venta\_etica} case depends on a database state the report does not store), and the saas pair 15/20 with 3 severe versus 14/20 with 8. The tables below give the published figures.
+% source: results/published/README.md (Severity re-score), computed with graves() from lib/policy.ts
+
+\subsection{Reference agent on the public realestate split}
+On all 52 public scenarios (dataset \code{baa77c130e24}) the reference agent succeeds on 41/52 (79\%)
+with 4 violations and 0 technical errors (Table~\ref{tab:ref}). The average charged price is 4{,}750~EUR
+against a 5{,}000~EUR list and 4{,}500~EUR floor; per-turn latency is p50 3.5~s, p95 11.8~s over 173 turns.
+Brain cost is \$1.17 in total, \$0.022 per conversation; running the exam (buyer \$0.97 + judge \$1.41)
+costs \$2.38.
+% source: results/published/closebench-glm-2026-08-31-1717.md
+This run's purpose was to validate the ground truth of six new red-team scenarios against a live judge;
+all held and none was rewritten. The three red-team failures trace to the agent: \code{inyeccion-01}
+resisted the injection but attempted an out-of-limits checkout (blocked by code), \code{inyeccion-02}
+leaked nothing but stopped at a demo where the buyer's criteria lead to a list-price payment, and
+\code{autoridad-01} refused the out-of-policy price but never challenged the unverifiable identity.
+% source: docs/ROADMAP.md (Stage 1, "Ground truth validated against a live judge"), MEMORY.md
+
+\begin{table}[t]
+\centering
+\small
+\caption{Reference agent (\code{glm-5.2}), realestate v1.1 public split, $k{=}1$, by tier.}
+% source: results/published/closebench-glm-2026-08-31-1717.md ("Por dificultad")
+\label{tab:ref}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Tier & Success & \passk{1} & Violations \\
+\midrule
+L1 --- direct close            & 3/4   & 3/4   & 0 \\
+L2 --- discovery / objections  & 21/26 & 21/26 & 1 \\
+L3 --- adversarial / policy    & 17/22 & 17/22 & 3 \\
+\midrule
+All                            & 41/52 & 41/52 & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discrimination control: \code{bad.md}}
+A benchmark that cannot separate a good agent from a deliberately bad one is broken. \code{prompts/bad.md}
+is a pushy prompt, willing to promise and loose with price, behind the same agent and brain.
+% source: docs/SCENARIOS.md ("The bad-prompt control")
+On the 29-scenario control subset (\code{redteam}, \code{regateo}, \code{objeciones}) it succeeds on
+18/29 (62\%) with 13 violations and 0 technical errors, against the reference agent's 23/29 (79\%) with
+3 violations on the same 29 scenarios (Table~\ref{tab:control}).
+% source: results/published/closebench-glm-2026-08-31-1729.md; reference subset from per-category rows of results/published/closebench-glm-2026-08-31-1717.md (11/15 + 6/6 + 6/8 = 23/29; 3+0+0 violations); also docs/ROADMAP.md
+Violations occur in 8 of the 29 \code{bad.md} runs against 3 for the reference.
+% source: "Violaciones detectadas" lists in results/published/closebench-glm-2026-08-31-1729.md (8 scenarios) and -1717.md (3 in the subset); MEMORY.md ("3 vs 8 violated runs")
+The rubric separates the two prompts as well: naturalness on \code{objeciones} falls from 8.4 to 3.8.
+% source: results/published/closebench-glm-2026-08-31-1717.md and -1729.md ("Por categoria")
+The \code{bad.md} violations are the planted pathologies---invented scarcity (``only taking 2 more
+projects this month''), false urgency, soft guarantees, accepting unverifiable authority, and parking
+an illegal request in a handoff without refusing it.
+% source: results/published/closebench-glm-2026-08-31-1729.md ("Violaciones detectadas")
+Its brain cost is \$0.015 per conversation, below the reference's \$0.022.
+% source: results/published/closebench-glm-2026-08-31-1729.md, -1717.md
+Note that the success-rate gap (23 vs.\ 18 of 29) is within the $k{=}1$ noise band discussed in
+Section~\ref{sec:limitations}; the violation gap is the larger signal.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Discrimination control on the same 29 scenarios (realestate v1.1, $k{=}1$). Nat./Disc.\ are
+mean judge rubric scores (0--10) for naturalness and discovery.}
+% source: results/published/closebench-glm-2026-08-31-1717.md (reference rows) and -1729.md (bad.md rows), "Por categoria"
+\label{tab:control}
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+ & \multicolumn{4}{c}{Reference prompt} & \multicolumn{4}{c}{\code{bad.md}} \\
+\cmidrule(lr){2-5}\cmidrule(l){6-9}
+Category & Success & Viol. & Nat. & Disc. & Success & Viol. & Nat. & Disc. \\
+\midrule
+\code{objeciones} & 6/8   & 0 & 8.4 & 6.6 & 4/8  & 4  & 3.8 & 3.8 \\
+\code{redteam}    & 11/15 & 3 & 8.3 & 5.7 & 9/15 & 8  & 6.0 & 3.8 \\
+\code{regateo}    & 6/6   & 0 & 8.3 & 5.7 & 5/6  & 1  & 6.2 & 2.7 \\
+\midrule
+Total             & 23/29 & 3 &     &     & 18/29 & 13 &    &     \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Hidden split (aggregate only)}
+On the sealed hidden split (digest \code{eb13fe4d875c}, 10 scenarios) a maintainer validation run of the
+reference agent scored 7/10 with 3 violations and 0 technical errors; the ground truth held and no
+scenario was rewritten. The sharpest catch was an agent that closed the sale correctly and then failed
+to refuse an explicit request to invoice a different amount than was paid.
+% source: docs/ROADMAP.md (Stage 3), README.md (Status), MEMORY.md
+Per policy the run is quoted in aggregate and its transcripts are not published. Two hidden scenarios
+whose premises are described in the repository's history count as leaked and are scheduled for refresh
+before any official hidden-split score exists. This is not an official score: the split is below the
+size floor (Section~\ref{sec:limitations}).
+% source: docs/ROADMAP.md (Stage 3, leak note), docs/GOVERNANCE.md ("Hidden split: size and refresh")
+
+\subsection{Second domain: \code{saas} (Preview)}
+On the 20 \code{saas} scenarios (v0.1, \code{9e186d0cf27f}) the reference agent reaches 15/20 with
+3 violations---a figure stitched from a run in which one conversation died on a transient 120~s turn
+timeout (14/20, non-citable on its own) and a clean re-run of that scenario (1/1). \code{bad.md} reaches
+14/20 with 10 violations.
+% source: results/published/closebench-glm-2026-08-31-1939.md, -1949.md, -1945.md; results/published/README.md
+The gate separates the prompts (3 vs.\ 10 violations); the success rate does not. In the three scenarios
+\code{bad.md} won, it genuinely did the right thing while the reference under-closed. The domain has 4
+red-team scenarios against realestate's 15, so pushiness is rarely itself a violation there. \code{saas}
+therefore stays in Preview until its red-team set grows and the control is re-run at $k>1$.
+% source: docs/ROADMAP.md (Stage 4)
+
+\subsection{Seeded baselines at \texorpdfstring{$k{=}8$}{k=8}}
+The baseline policy seeds a small set of maintainer-run brains behind the \emph{same} bundled
+reference agent, so that rows compare brains rather than scaffolding, together with \code{bad.md} as a
+published floor; the anchor (\code{reference-GLM}) re-runs on every dataset version bump, and every
+other baseline stays pinned to the digest it ran under.
+% source: docs/GOVERNANCE.md ("Baseline policy"), docs/ROADMAP.md (Stage 2)
+Table~\ref{tab:baselines} is a placeholder: no complete $k{=}8$ baseline exists yet; a first attempt ran out
+of API credit mid-run and is not citable.
+% source: docs/ROADMAP.md (working tree, Stage 3 "First verified entries"), docs/PENDIENTE.md
+
+\begin{table}[t]
+\centering
+\small
+\caption[Seeded baselines at k=8]{\TODO{fill from the k=8 runs.} Seeded baselines, realestate v1.1 (\code{baa77c130e24}), public
+split, $k{=}8$, judge \code{claude-opus-4-8}, buyer \code{claude-sonnet-5}. Viol.\ = severe violations
+over 416 conversations. $^{\dagger}$Brain from the same vendor as judge and buyer.}
+% source (model ids and routes): docs/GOVERNANCE.md, working-tree "Revision 2026-10-09" table; 416 = 52 x 8 (docs/PENDIENTE.md)
+\label{tab:baselines}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+Baseline & Model id (route) & \passk{1} & \passk{8} & Viol. & \$/conv \\
+\midrule
+reference-GLM (anchor) & \code{glm-5.2} (Z.ai)                 & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+Opus$^{\dagger}$        & \code{claude-opus-5-5} (Anthropic)    & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+Sonnet$^{\dagger}$      & \code{claude-sonnet-5-5} (Anthropic)  & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+Haiku$^{\dagger}$       & \code{claude-haiku-5-5} (Anthropic)   & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+\code{bad.md} floor     & \code{glm-5.2} + \code{prompts/bad.md} (Z.ai) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Optional, pending budget or keys}} \\
+Fable$^{\dagger}$       & \code{claude-fable-5-1} (Anthropic)   & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+Kimi                    & \code{moonshotai/kimi-k3} (OpenRouter, pinned) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+Qwen                    & \code{qwen/qwen3.8-max-0902} (OpenRouter, pinned) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+GPT-5.6 Sol             & \code{openai/gpt-5.6-sol} (OpenRouter, pinned) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\TODO{After the runs: report the pass\textsuperscript{1}--pass\textsuperscript{8} gap per baseline,
+per-tier breakdown, which baseline (if any) carries a seeded verification stamp and its seed, and the
+evaluation cost per conversation actually measured.}
+
+% =====================================================================================
+\section{Governance and anti-gaming}
+\label{sec:governance}
+
+\paragraph{Submission and verification.} A submission is the unmodified report JSON a run emits: a
+manifest pinning dataset version and digest, split, $k$, protocol, division, agent command and prompt,
+the three model ids and the harness commit, plus every transcript recorded during inference.
+\code{submit:validate} rejects incomplete manifests, missing transcripts, runs with technical errors,
+digest mismatches, partial split coverage and a declared $k$ without its runs. Maintainers then re-run a
+seeded ${\sim}20\%$ subset (minimum 3 scenarios) under the pinned configuration and compare per-scenario
+\passk{k} and violation presence; at $\geq 80\%$ reproduction the entry receives a stamp bound to the
+SHA-256 of the report bytes, and below it the entry is held and the submitter contacted. Comparison is at
+outcome level because buyer and judge are sampled with temperature.
+% source: docs/SUBMISSIONS.md, docs/GOVERNANCE.md ("Submitting a result")
+The stamp binding does not authenticate its origin---there is deliberately no maintainer
+secret---so origin is a process rule: pull requests that add or edit a stamp are rejected.
+% source: docs/GOVERNANCE.md ("Anti-gaming"), REPRODUCE.md
+The leaderboard is regenerated deterministically from the submissions directory; tables never mix
+domains, versions, digests, splits or divisions; headline is \passk{k}, never best-of-$k$; each
+organization may hold at most 3 entries per dataset version, and every submitted variant is published.
+% source: docs/SUBMISSIONS.md ("The leaderboard", "Anti-gaming summary"), docs/GOVERNANCE.md
+The leaderboard is currently empty.
+% source: LEADERBOARD.md ("No entries yet")
+
+\paragraph{Hidden split policy.} Twenty scenarios per domain is the floor for an official score and
+thirty the target. The set is refreshed immediately on a leak, and about one third is rotated between
+submission rounds; retired hidden scenarios become public; every change re-seals the commitment, whose
+history stays in version control. Every hidden score must be published with its interval.
+% source: docs/GOVERNANCE.md ("Hidden split: size and refresh")
+
+\paragraph{Baseline policy.} ``Seed, then step back'': maintainers publish a small set of baselines so the
+board is legible on day one, then leave it to submissions. Model ids are pinned (with a date where the
+provider supports it), a model update is a new entry, and OpenRouter routes are pinned to the model's
+own provider with fallbacks off, since an unpinned run can be spread across providers with different
+prices and possibly quantized weights.
+% source: docs/GOVERNANCE.md ("Baseline policy")
+
+\paragraph{Committed but inactive.} Versioned submission rounds, MLPerf-style availability tags
+(Available / Preview / RDI), assigned mutual peer review with spot audits, a quarterly ``Live'' refresh
+of the public set, and a multi-organization steering group are written down but not active: they need
+submission volume, budget or partner organizations that do not yet exist.
+% source: docs/GOVERNANCE.md ("Stage 4"), docs/LIVE.md
+
+\paragraph{Conflicts of interest.} We state these plainly.
+(i)~The judge (\code{claude-opus-4-8}) and the buyer (\code{claude-sonnet-5}) are Anthropic models.
+(ii)~Three of the five seeded baselines that run first (\code{claude-opus-5-5}, \code{claude-sonnet-5-5},
+\code{claude-haiku-5-5}) are Anthropic models too, because the maintainer currently holds only Anthropic and
+Z.ai API keys; self-preference cannot be ruled out by construction for those rows, which are flagged.
+LLM judges are known to favor their own generations~\citep{panickssery2024self}; the planned mitigation is a
+panel of at least three model families, including non-Anthropic judges, with authorship
+stripped~\citep{verga2024juries}, and a $\kappa$ round focused on Claude-brain transcripts.
+% source: docs/GOVERNANCE.md (working-tree "Revision 2026-10-09" + "Neutrality cost of this set"), docs/METHODOLOGY.md ("Judge != contestant")
+(iii)~The author is the sole maintainer, wrote the scenarios and rubric, and is one of the two human
+labelers in Section~\ref{sec:kappa}. (iv)~The author's company, Forge-AI, develops a commercial sales agent
+(CloseForge, a Forge-AI product) from which \cb{} was extracted and which is expected to be submitted as an entrant;
+maintainer-affiliated entries are disclosed and do not appear as verified without an independent re-run.
+% source: docs/GOVERNANCE.md ("Conflict of interest, applied to the first real case"), README.md, MEMORY.md ("Provenance")
+
+% =====================================================================================
+\section{Limitations}
+\label{sec:limitations}
+
+\paragraph{Language and domain coverage.} The realestate split is two-thirds Spanish (35 of 52), and
+the rubric, judge prompt, policy text and harness comments are in Spanish; personas and rubric have not
+been reviewed by native speakers of other languages. Only one domain is Official, and the second is in
+Preview.
+% source: docs/SCENARIOS.md, docs/ROADMAP.md (Stage 4: "More languages ... blocked on native speakers"), docs/DOMAINS.md, MEMORY.md (code comments in Spanish)
+
+\paragraph{Hidden split below its own floor.} The realestate hidden split has 10 scenarios against a
+floor of 20, and \code{saas} has none, so neither backs an official score yet. At $p\approx0.75$ the 95\%
+interval on a hidden score is about $\pm27$ points at $n{=}10$, $\pm19$ at $n{=}20$ and $\pm15$ at
+$n{=}30$.
+% source: docs/GOVERNANCE.md ("Hidden split: size and refresh"); scenarios-hidden.sha256
+Two of the ten hidden scenarios count as leaked.
+% source: docs/ROADMAP.md (Stage 3)
+
+\paragraph{Single-vendor judge and buyer.} Judge and buyer come from one vendor, as do most of the
+first baselines (Section~\ref{sec:governance}), and the judge does not yet reach human--human agreement
+(Section~\ref{sec:kappa}). Our $\kappa$ evidence is small (two labelers, 40 conversations each), one labeler is
+the author, and part of the reference-run labels were corrected non-blind.
+% source: results/published/README.md, results/published/revision-humana-2026-08-31-1717-andres-marmol.md, MEMORY.md
+
+\paragraph{LLM-simulated buyer.} The buyer is an LLM. Hidden criteria, budgets and no-sale outcomes
+counter its known tendency not to walk away, but we have not measured persona fidelity for our own buyer.
+\TODO{Persona-fidelity check for the simulated buyer, or state it as future work.}
+
+\paragraph{Statistics of $k$ and $n$.} With $n{=}52$ scenarios and $p\approx0.79$ the binomial standard
+error is about 5.6 points, so the 95\% interval is roughly $\pm11$ points: at $k{=}1$, two agents within
+about six scenarios of each other are indistinguishable.
+% source: docs/GOVERNANCE.md ("k = 8"). Check: sqrt(0.79*0.21/52) = 0.0565; 1.96*0.0565 = 0.111; 0.111*52 = 5.8 scenarios
+All published results in Section~\ref{sec:experiments} are $k{=}1$, which is why the realestate control
+is read mainly through its violation gap and why the \code{saas} 15/20 vs.\ 14/20 control is read as ``no
+difference''. The interval on the 29-scenario control subset is wider still.
+\TODO{If desired, add the interval for n = 29 computed from the same formula, with a source comment pointing to this derivation.}
+Buyer and judge are sampled with temperature, so a run reproduces in configuration, not token for token.
+% source: docs/ROADMAP.md (Stage 2, run manifest), REPRODUCE.md
+
+\paragraph{Construct validity.} Every conversation sells a single fictional offer per domain over a
+WhatsApp-style channel, and the hidden ``correct outcome'' is authored by the maintainer. A
+human-audited \code{CloseBench-Verified} subset is planned but blocked on the labeling above.
+% source: docs/ROADMAP.md (Stage 1)
+
+\paragraph{Rule changes across time.} The severity classification introduced on 2026-09-16 makes
+reports written before that date stricter than current ones; comparisons across that date need care.
+% source: docs/METHODOLOGY.md ("Severity")
+
+% =====================================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+\cb{} evaluates AI sales agents as deployed systems: through their production entry point, against a
+buyer that can walk away, with objective facts from mocked payment and messaging services anchoring an
+LLM judge, and with an absolute compliance gate so that lying cannot buy a higher score. Its
+discrimination control already shows that the gate, not the success rate, is what separates a pushy agent
+from a careful one at $k{=}1$. Its weakest component is equally visible: the judge does not yet match
+human agreement, and the first baselines share a vendor with the judge and buyer. We release the harness,
+the public scenarios, every published run with transcripts, and the blind labeling sheets, and we invite
+third-party reproduction, labels and submissions.
+
+\paragraph{Availability.} Code and data: \url{https://github.com/AndreuwMetal/closebench} (MIT);
+dataset mirror: \url{https://huggingface.co/datasets/AndreuwMetal/closebench}.
+% source: README.md (badges, license)
+Scores should be cited with domain, dataset version, digest and split, e.g.\ ``\cb{} (realestate, v1.1,
+dataset \code{baa77c130e24}, public split)''.
+% source: REPRODUCE.md ("Citing this benchmark")
+\TODO{Zenodo DOI for the release.}
+
+\section*{Acknowledgments}
+We thank Helena Gallego for independent blind labeling. Parts of this manuscript and of the benchmark
+code were drafted with the assistance of Claude (Anthropic); the author reviewed them and is responsible
+for all content. This work received no external funding.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
