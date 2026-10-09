@@ -380,6 +380,10 @@ Pair & \code{exito} & \code{violacion} & \code{exito} & \code{violacion} \\
 Judge $\leftrightarrow$ Andr\'es$^{\ast}$ & 85\% $\cdot$ 0.71 & 90\% $\cdot$ 0.62 & 60\% $\cdot$ 0.25 & 65\% $\cdot$ 0.15 \\
 Judge $\leftrightarrow$ Helena            & 65\% $\cdot$ 0.33 & 80\% $\cdot$ 0.00$^{\dagger}$ & 60\% $\cdot$ 0.25 & 65\% $\cdot$ 0.15 \\
 Andr\'es$^{\ast}$ $\leftrightarrow$ Helena & 80\% $\cdot$ 0.57 & 90\% $\cdot$ 0.00$^{\dagger}$ & 100\% $\cdot$ 1.00 & 100\% $\cdot$ 1.00 \\
+\midrule
+% source: kappa.ts on results/published/revision-humana-2026-08-31-1717-andres-marmol-blind.md + -helena-gallego.md
+Judge $\leftrightarrow$ Andr\'es (blind) & 65\% $\cdot$ 0.31 & 70\% $\cdot$ $-0.15$ & --- & --- \\
+Andr\'es (blind) $\leftrightarrow$ Helena & 90\% $\cdot$ 0.78 & 90\% $\cdot$ 0.00$^{\dagger}$ & --- & --- \\
 \bottomrule
 \end{tabular}
 
@@ -410,7 +414,8 @@ clearly below the human pair. Until judge--human agreement reaches human--human 
 the judge as a careful opinion rather than a measure. The facts, the gate on code-detected events and
 the cost accounting are mechanical and do not depend on it.
 % source: README.md (Status: "the judge does not clear its own bar")
-\TODO{Report human--human agreement on 1717 using Andr\'es's original blind labels (recover from commit 61bf7ce / the sheet header) so the reference-run comparison is fully blind.}
+With Andr\'es's original blind labels (published as \code{-andres-marmol-blind.md}, rebuilt by undoing the five documented changes), the fully blind reference-run comparison is starker: the judge agrees with each human 65\% of the time on \code{exito}, while the two humans agree 90\% ($\kappa$ 0.78) with each other.
+% source: kappa.ts on results/published/revision-humana-2026-08-31-1717-andres-marmol-blind.md and -helena-gallego.md
 \TODO{Adjudicate the disagreements and state whether the judge, the rubric, or neither changes; MEMORY.md records a queued clarification that ``you won't be disappointed'' is a commercial formula, not a guarantee.}
 \TODO{Second $\kappa$ round on transcripts from the Claude-brain baselines (vendor self-preference check; see Section~\ref{sec:governance}).}
 
@@ -425,7 +430,8 @@ They predate the 2026-09-16 severity classification, so every violation listed i
 under the current rule some of them (e.g.\ ``la web se paga sola con un par de ventas'', a code-blocked
 price attempt) fall into categories now classed as minor.
 % source: docs/METHODOLOGY.md ("Severity"); violation quotes in results/published/closebench-glm-2026-08-31-1717.md and -1729.md
-\TODO{Re-derive the published success/violation counts under the severity rule (\code{graves()}) and report both, or state that all numbers are pre-severity.}
+Re-scored offline under the current rule on the same stored violations, the reference run reads 42/52 with 2 severe violations (41/52 with 4 as published), its 29-scenario control subset 24/29 with 1 severe (23/29 with 3), the \code{bad.md} control 18--19/29 with 10 severe (18/29 with 13; one \code{no\_venta\_etica} case depends on a database state the report does not store), and the saas pair 15/20 with 3 severe versus 14/20 with 8. The tables below give the published figures.
+% source: results/published/README.md (Severity re-score), computed with graves() from lib/policy.ts
 
 \subsection{Reference agent on the public realestate split}
 On all 52 public scenarios (dataset \code{baa77c130e24}) the reference agent succeeds on 41/52 (79\%)

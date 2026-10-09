@@ -40,7 +40,7 @@ simulated BUYER          transcript        OBJECTIVE FACTS
 | **`lib/mocks.ts`** | One HTTP server that impersonates WhatsApp (Kapso), Stripe, and — in dry mode — the LLM brain. Captures outbound bubbles and checkout amounts. This is how the bench watches the agent act without touching any real service. |
 | **`lib/llm.ts`** | Zero-dependency LLM clients: OpenAI-compatible (brain under test) and Anthropic-native (judge + buyer, with schema-validated JSON output). Token→\$ cost table. |
 | **`lib/util.ts`** | Concurrency pool, HMAC signing, JSON extraction, formatting. |
-| **`scenarios/*.json`** | The 46-scenario exam. See [SCENARIOS.md](SCENARIOS.md). |
+| **`scenarios/*.json`** | The 52-scenario exam (public split). See [SCENARIOS.md](SCENARIOS.md). |
 | **`offer.json`** | The single canonical offer under test — the only source of truth. Inventing anything outside it is, by definition, a lie the judge must catch. |
 | **`negotiation.ts`** | The secondary bilateral-negotiation track (no tools). |
 
