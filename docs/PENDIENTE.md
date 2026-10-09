@@ -65,7 +65,7 @@ Si el saldo se acaba a mitad, el informe dice `RUN INCOMPLETO` y lista los `--so
 ## 6. Difusión (gratis o casi, en este orden)
 
 - [ ] Paper en arXiv (borrador en `paper/`): necesita la tabla de baselines del §4. Subirlo también a HF Papers en los 14 días siguientes a su publicación en arXiv.
-- [ ] DOI en Zenodo: activar el repo en zenodo.org (GitHub integration) y publicar un release (Zenodo toma los metadatos de `CITATION.cff`; ahí el autor figura como "Andreuw Metal": decidir si va el nombre real, como en el paper). Añadir el DOI a `CITATION.cff`.
+- [ ] DOI en Zenodo: activar el repo en zenodo.org (GitHub integration) y publicar un release (Zenodo toma los metadatos de `CITATION.cff`). Añadir el DOI a `CITATION.cff`.
 - [ ] HF: convertir el dataset en benchmark oficial (`eval.yaml` + PR del framework a huggingface.js + petición de allow-list en el foro).
 - [ ] Kaggle Community Benchmark con el split público (Kaggle pone los modelos).
 - [ ] Con paper y leaderboard: email a benchmarks@epoch.ai y formulario de partnerships de Artificial Analysis.

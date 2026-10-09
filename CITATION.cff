@@ -3,9 +3,11 @@ message: "If you use this software, please cite it as below. If you cite a speci
 type: software
 title: "CloseBench: an end-to-end, compliance-gated benchmark for AI sales agents"
 authors:
-  - given-names: Andreuw
-    family-names: Metal
+  - given-names: Andrés
+    family-names: Mármol del Amo
     alias: AndreuwMetal
+    affiliation: Forge-AI
+    website: "https://forge-ai.xyz"
 repository-code: "https://github.com/AndreuwMetal/closebench"
 url: "https://github.com/AndreuwMetal/closebench"
 license: MIT
