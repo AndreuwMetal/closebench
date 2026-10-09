@@ -13,6 +13,8 @@ export const PROVEEDOR_OFICIAL: Record<string, string> = {
 export const proveedorOpenRouter = (slug: string): string | undefined =>
   process.env.OPENROUTER_PROVIDER?.trim() || Object.entries(PROVEEDOR_OFICIAL).find(([pre]) => slug.startsWith(pre))?.[1];
 export type MensajeChat = { role: "system" | "user" | "assistant"; content: string };
+// Bloques de texto para chatClaude: permiten poner cache_control en mitad de un mensaje.
+export type BloqueTexto = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
 
 // $/M tokens para el coste por conversación (jul-2026; verificar en z.ai / anthropic si cambian).
 export const PRECIOS: Record<string, { in: number; out: number }> = {
@@ -23,7 +25,12 @@ export const PRECIOS: Record<string, { in: number; out: number }> = {
   "claude-opus-5": { in: 5, out: 25 },     // cerebro Claude nativo: la entrada llega ya en tokens equivalentes (caché)
   "claude-opus-4-8": { in: 5, out: 25 },
   "anthropic/claude-opus-4.8": { in: 5, out: 25 },
-  "claude-sonnet-5": { in: 3, out: 15 },
+  "claude-sonnet-5": { in: 2, out: 10 },   // tarifa API 1P (antes 3/15: inflaba el coste del comprador)
+  // Cerebros Claude nativos (API 1P de Anthropic, tarifas 2026-10-06)
+  "claude-opus-5-5": { in: 4, out: 20 },
+  "claude-sonnet-5-5": { in: 2, out: 10 },
+  "claude-haiku-5-5": { in: 0.1, out: 0.5 },
+  "claude-fable-5-1": { in: 10, out: 50 },
   "claude-haiku-4-5": { in: 1, out: 5 },
   // Cerebros baseline vía OpenRouter: tarifa del proveedor OFICIAL al que se fija la ruta
   // (openrouter.ai/api/v1/models/<slug>/endpoints, 2026-10-09).
@@ -87,16 +94,23 @@ export async function chatOpenAI(opts: {
   };
 }
 
+// Tokens de entrada "equivalentes" a precio normal: escribir caché (TTL 5 min) cuesta 1,25×, leerla 0,1×.
+// Así PRECIOS sigue valiendo tal cual y el coste reportado no se infla ni se esconde con el caché.
+export const entradaEquivalente = (u: any): number =>
+  Math.round((u?.input_tokens ?? 0) + 1.25 * (u?.cache_creation_input_tokens ?? 0) + 0.1 * (u?.cache_read_input_tokens ?? 0));
+
 // ── API nativa de Anthropic (juez y comprador). Con `schema` fuerza JSON validado. ──
 // Nota Opus 4.8 / Sonnet 5: nada de temperature/top_p (400); Sonnet 5 razona por defecto → se desactiva.
 export async function chatClaude(opts: {
-  modelo: string; system?: string; mensajes: MensajeChat[];
+  modelo: string; system?: string; mensajes: (MensajeChat | { role: "user" | "assistant"; content: BloqueTexto[] })[];
   maxTokens?: number; schema?: object; pensar?: boolean;
 }): Promise<{ texto: string; json: any; uso: Uso }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new ErrorLLM("Falta ANTHROPIC_API_KEY en .env (la usan el juez y el comprador simulado)");
   const body: any = { model: opts.modelo, max_tokens: opts.maxTokens ?? 1000, messages: opts.mensajes };
-  if (opts.system) body.system = opts.system;
+  // El system es fijo entre llamadas (rúbrica del juez para todo el dominio; persona del comprador en
+  // todos los turnos y las k corridas del escenario): se cachea. Por debajo del mínimo cacheable no cuesta nada.
+  if (opts.system) body.system = [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }];
   if (opts.pensar) body.thinking = { type: "adaptive" };
   else if (opts.modelo.startsWith("claude-sonnet-5")) body.thinking = { type: "disabled" };
   if (opts.schema) body.output_config = { format: { type: "json_schema", schema: opts.schema } };
@@ -112,7 +126,7 @@ export async function chatClaude(opts: {
     try { json = JSON.parse(texto); }
     catch { throw new ErrorLLM(`JSON inválido del modelo (stop_reason=${data.stop_reason}): ${texto.slice(0, 200)}`); }
   }
-  return { texto, json, uso: { entrada: data.usage?.input_tokens ?? 0, salida: data.usage?.output_tokens ?? 0 } };
+  return { texto, json, uso: { entrada: entradaEquivalente(data.usage), salida: data.usage?.output_tokens ?? 0 } };
 }
 
 if (import.meta.main) {
@@ -122,5 +136,7 @@ if (import.meta.main) {
   assert.equal(proveedorOpenRouter("mistralai/x"), undefined, "sin proveedor conocido no se fija ruta");
   for (const slug of ["z-ai/glm-5.2", "anthropic/claude-opus-5", "moonshotai/kimi-k3", "qwen/qwen3.8-max-0902", "openai/gpt-5.6-sol"])
     assert.ok(PRECIOS[slug] && proveedorOpenRouter(slug), `baseline sin tarifa o sin proveedor: ${slug}`);
+  assert.equal(entradaEquivalente({ input_tokens: 100, cache_creation_input_tokens: 1000, cache_read_input_tokens: 10000 }), 2350);
+  assert.equal(entradaEquivalente(undefined), 0);
   console.log("llm.ts ok");
 }

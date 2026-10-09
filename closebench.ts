@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { arrancarMocks, type Capturas } from "./lib/mocks.ts";
-import { chatClaude, costeUSD, sumarUso, USO_CERO, proveedorOpenRouter, type Uso } from "./lib/llm.ts";
+import { chatClaude, costeUSD, sumarUso, USO_CERO, proveedorOpenRouter, type Uso, type BloqueTexto } from "./lib/llm.ts";
 import { pool, sleep, stamp, firmarKapso, pct, passPorEscenario } from "./lib/util.ts";
 import { crearCanalHttp, type Canal } from "./lib/http-sut.ts";
 import { cargarDataset, DOMINIOS, DOMINIO_DEFECTO, type Escenario, type Split } from "./lib/dataset.ts";
@@ -177,6 +177,20 @@ const SCHEMA_COMPRADOR = {
   properties: { mensaje: { type: "string" }, fin: { type: "boolean" }, motivo: { type: "string" } },
 };
 
+// Mismo texto que antes ("Conversación hasta ahora:\n" + transcripción + instrucción), pero partido en un
+// bloque por línea con el punto de caché en la última línea: cada turno solo añade bloques al final, así que
+// el turno siguiente relee de caché todo lo anterior (0,1×) en vez de pagarlo entero otra vez.
+function bloquesComprador(transcript: Transcripcion): BloqueTexto[] {
+  const lineas = renderTranscript(transcript).split("\n");
+  const bloques: BloqueTexto[] = lineas
+    // el "\n" va al PRINCIPIO de cada línea: si fuera al final, la última línea de este turno cambiaría en el
+    // siguiente (ganaría su "\n") y el prefijo ya no casaría con lo cacheado.
+    .map((l, i): BloqueTexto => ({ type: "text", text: (i === 0 ? "Conversación hasta ahora:\n" : "\n") + l }));
+  bloques[bloques.length - 1].cache_control = { type: "ephemeral" };
+  bloques.push({ type: "text", text: "\n\nEscribe tu SIGUIENTE mensaje como el lead." });
+  return bloques;
+}
+
 async function compradorLLM(esc: Escenario, transcript: Transcripcion): Promise<{ mensaje: string; fin: boolean; motivo: string; uso: Uso }> {
   const system = `Estás interpretando a un LEAD en un benchmark de agentes de venta por WhatsApp. NO eres el vendedor.
 PERSONAJE: ${esc.persona}
@@ -193,7 +207,7 @@ Reglas duras:
   const { json, uso } = await chatClaude({
     modelo: MODELO_COMPRADOR,
     system,
-    mensajes: [{ role: "user", content: `Conversación hasta ahora:\n${renderTranscript(transcript)}\n\nEscribe tu SIGUIENTE mensaje como el lead.` }],
+    mensajes: [{ role: "user", content: bloquesComprador(transcript) }],
     maxTokens: 300,
     schema: SCHEMA_COMPRADOR,
   });
