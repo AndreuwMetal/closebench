@@ -13,6 +13,8 @@
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage[numbers,sort&compress]{natbib}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
 
@@ -25,8 +27,8 @@
 \author{Andr\'es M\'armol del Amo\\
   Forge-AI\\
   \url{https://forge-ai.xyz}\\
-  \TODO{email}}
-\date{\TODO{submission date}}
+  \href{mailto:andresforjaai@gmail.com}{\nolinkurl{andresforjaai@gmail.com}}}
+\date{\today}
 
 \begin{document}
 \sloppy % long code identifiers and paths: allow looser spacing instead of running into the margin
@@ -47,11 +49,10 @@ payment, messaging and database services. Success requires reaching the scenario
 conversation is a first-class metric. The public real-estate split contains 52 scenarios
 % source: docs/SCENARIOS.md
 in three difficulty tiers, with a sealed hidden split and a second, preview-stage SaaS domain. A
-reference agent reaches 41/52 on the public split at $k{=}1$,
-% source: results/published/closebench-glm-2026-08-31-1717.md
-and a deliberately bad prompt is separated from it mainly by the compliance gate (13 vs.\ 3 violations
-on the same 29 scenarios).
-% source: results/published/closebench-glm-2026-08-31-1729.md, results/published/closebench-glm-2026-08-31-1717.md
+reference agent reaches 42/52 on the public split at $k{=}1$,
+and a deliberately bad prompt is separated from it mainly by the compliance gate (10 vs.\ 1 severe
+violations on the same 29 scenarios).
+% source: results/published/README.md ("Severity re-score": graves() on the stored violations of runs 1717 and 1729)
 We also report the judge's agreement with two human labelers: it does \emph{not} yet reach
 human--human agreement, and we treat it as an opinion rather than a measure until it does. Harness,
 scenarios, rubric and all published runs are released under the MIT license.
@@ -154,9 +155,38 @@ review are borrowed from MLPerf~\citep{reddi2020mlperf,mlcommons2024rules}.
 \section{Benchmark design}
 \label{sec:design}
 
-\TODO{Figure 1: pipeline diagram (scenario $\to$ buyer $\rightleftarrows$ agent under test $\to$ mocks
-$\to$ objective facts $\to$ judge $\to$ score), adapted from the ASCII diagram in README.md /
-docs/ARCHITECTURE.md.}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  font=\small, >={Stealth[length=2.2mm]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=4pt, minimum height=9mm},
+  llmbox/.style={box, fill=black!6},
+  sysbox/.style={box, fill=white},
+  resbox/.style={box, fill=black!12, font=\small\bfseries},
+  lbl/.style={font=\scriptsize, align=center}]
+\node[box, text width=14.6cm] (sc) at (0,0) {\textbf{Scenario}: persona $\cdot$ hidden budget $\cdot$ attitude $\cdot$ correct outcome};
+\node[llmbox, text width=3.8cm] (buyer) at (-4.6,-1.9) {Simulated \textbf{buyer}\\(LLM)};
+\node[sysbox, text width=5.8cm] (agent) at (3.6,-1.9) {\textbf{Agent under test}\\prompt $+$ tools $+$ guardrails $+$ state};
+\node[sysbox, text width=5.8cm] (mocks) at (3.6,-3.9) {Mock payments $\cdot$ messaging $\cdot$ SQLite};
+\node[sysbox, text width=5.8cm] (facts) at (3.6,-5.8) {\textbf{Objective facts}: paid? amount?\\final state? guardrail hits?};
+\node[llmbox, text width=3.8cm] (judge) at (-4.6,-5.8) {\textbf{Judge} (LLM)\\transcript $+$ facts};
+\node[resbox, text width=14.6cm] (score) at (0,-7.7) {score $\cdot$ severe violations (gate) $\cdot$ \passk{k} $\cdot$ \$/conversation};
+\draw[->] (sc.south -| buyer) -- (buyer.north);
+\draw[<->, thick] (buyer.east) -- node[lbl, above] {webhook or HTTP} node[lbl, below] {multi-turn chat} (agent.west);
+\draw[->] (agent.south) -- node[lbl, right] {tool calls: pay / demo / handoff} (mocks.north);
+\draw[->] (mocks.south) -- node[lbl, right] {harness reads the truth} (facts.north);
+\draw[->] (buyer.south) -- node[lbl, left] {transcript} (judge.north);
+\draw[->] (facts.west) -- node[lbl, above] {injected into the prompt} (judge.east);
+\draw[->] (judge.south) -- (judge.south |- score.north);
+\draw[->] (facts.south) -- (facts.south |- score.north);
+\end{tikzpicture}
+\caption{The \cb{} loop. A scenario drives an LLM buyer against the complete agent through its
+production entry point; the agent's tools hit mocked services, from which the harness reads objective
+facts. The judge rules on policy and style with those facts injected, so it cannot be talked into a sale
+that did not happen; any severe violation fails the scenario.}
+\label{fig:pipeline}
+\end{figure}
+
 
 \subsection{The whole agent is under test}
 \cb{} evaluates a system, not a model. The runner spawns the agent under test as a child process,
@@ -357,7 +387,7 @@ labeling, and the maintainer subsequently adopted the judge's labels.
 % source: MEMORY.md, docs/ROADMAP.md (Stage 1), REPRODUCE.md
 
 \paragraph{Data.} Two labelers, Andr\'es M\'armol (the author and maintainer) and Helena Gallego
-\TODO{affiliation and relevant expertise of the second labeler}, each labeled 20 stratified
+(unaffiliated with Forge-AI, with no stake in the results; a personal acquaintance of the author), each labeled 20 stratified
 conversations from the reference run (\code{1717}, sampled from 52) and 20 from the \code{bad.md}
 control (\code{1729}, sampled from 29).
 % source: results/published/revision-humana-2026-08-31-1717-*.md and -1729-*.md (sheet headers: "20 de 52", "20 de 29")
@@ -629,11 +659,10 @@ panel of at least three model families, including non-Anthropic judges, with aut
 stripped~\citep{verga2024juries}, and a $\kappa$ round focused on Claude-brain transcripts.
 % source: docs/GOVERNANCE.md (working-tree "Revision 2026-10-09" + "Neutrality cost of this set"), docs/METHODOLOGY.md ("Judge != contestant")
 (iii)~The author is the sole maintainer, wrote the scenarios and rubric, and is one of the two human
-labelers in Section~\ref{sec:kappa}. (iv)~The author's company develops a commercial sales agent
-(CloseForge) from which \cb{} was extracted and which is expected to be submitted as an entrant;
+labelers in Section~\ref{sec:kappa}. (iv)~The author's company, Forge-AI, develops a commercial sales agent
+(CloseForge, a Forge-AI product) from which \cb{} was extracted and which is expected to be submitted as an entrant;
 maintainer-affiliated entries are disclosed and do not appear as verified without an independent re-run.
 % source: docs/GOVERNANCE.md ("Conflict of interest, applied to the first real case"), README.md, MEMORY.md ("Provenance")
-\TODO{Confirm the relationship between Forge-AI and CloseForge for the COI statement.}
 
 % =====================================================================================
 \section{Limitations}
@@ -705,8 +734,9 @@ dataset \code{baa77c130e24}, public split)''.
 \TODO{Zenodo DOI for the release.}
 
 \section*{Acknowledgments}
-We thank Helena Gallego for independent blind labeling. \TODO{other acknowledgments; funding (if any);
-disclosure of any AI assistance used in preparing this manuscript, as required by the venue.}
+We thank Helena Gallego for independent blind labeling. Parts of this manuscript and of the benchmark
+code were drafted with the assistance of Claude (Anthropic); the author reviewed them and is responsible
+for all content. \TODO{funding statement (if any).}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
