@@ -29,6 +29,7 @@
 \date{\TODO{submission date}}
 
 \begin{document}
+\sloppy % long code identifiers and paths: allow looser spacing instead of running into the margin
 \maketitle
 
 % =====================================================================================
@@ -551,6 +552,7 @@ split, $k{=}8$, judge \code{claude-opus-4-8}, buyer \code{claude-sonnet-5}. Viol
 over 416 conversations. $^{\dagger}$Brain from the same vendor as judge and buyer.}
 % source (model ids and routes): docs/GOVERNANCE.md, working-tree "Revision 2026-10-09" table; 416 = 52 x 8 (docs/PENDIENTE.md)
 \label{tab:baselines}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llcccc@{}}
 \toprule
 Baseline & Model id (route) & \passk{1} & \passk{8} & Viol. & \$/conv \\
@@ -567,7 +569,7 @@ Kimi                    & \code{moonshotai/kimi-k3} (OpenRouter, pinned) & \TODO
 Qwen                    & \code{qwen/qwen3.8-max-0902} (OpenRouter, pinned) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
 GPT-5.6 Sol             & \code{openai/gpt-5.6-sol} (OpenRouter, pinned) & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \TODO{After the runs: report the pass\textsuperscript{1}--pass\textsuperscript{8} gap per baseline,
@@ -700,7 +702,7 @@ dataset mirror: \url{https://huggingface.co/datasets/AndreuwMetal/closebench}.
 Scores should be cited with domain, dataset version, digest and split, e.g.\ ``\cb{} (realestate, v1.1,
 dataset \code{baa77c130e24}, public split)''.
 % source: REPRODUCE.md ("Citing this benchmark")
-\TODO{Zenodo DOI for the release; reconcile CITATION.cff author field with the paper's author name.}
+\TODO{Zenodo DOI for the release.}
 
 \section*{Acknowledgments}
 We thank Helena Gallego for independent blind labeling. \TODO{other acknowledgments; funding (if any);

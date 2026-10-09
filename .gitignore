@@ -37,3 +37,6 @@ domains/*/scenarios-hidden/
 
 # Session scratch (subagent-driven-development ledger)
 .superpowers/
+
+# Built paper (regenerate: cd paper && tectonic -X compile closebench.tex)
+paper/*.pdf

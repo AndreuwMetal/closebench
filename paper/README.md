@@ -9,3 +9,5 @@ Before submission:
 - [ ] Author email, date, Forge-AI/CloseForge COI wording, AI-assistance disclosure, Figure 1 (pipeline).
 - [ ] References marked `note = {verify}` in `references.bib` (2605.08334, 2606.20708, PACT, SWE-bench-Live, 2402.15813, DarkBench, Anthropic persuasion authors).
 - [ ] Zenodo DOI; make `CITATION.cff` author match the paper. Then `grep -n TODO closebench.tex` must return nothing.
+
+Alternative build (what was used on 2026-10-09): `tectonic -X compile closebench.tex` (fetches the TeX packages it needs on first run).
